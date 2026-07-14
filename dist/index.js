@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { RestconfClient, loadConfigFromEnv } from "./restconf.js";
-import { listAccessPoints, listWirelessClients, listWlans } from "./wlc.js";
+import { listAccessPoints, listWirelessClients, listWlans, listRogueAps } from "./wlc.js";
 const config = loadConfigFromEnv();
 const restconf = new RestconfClient(config);
 const server = new McpServer({
@@ -33,6 +33,14 @@ server.registerTool("list_wlans", {
 }, async () => {
     const wlans = await listWlans(restconf);
     return { content: [{ type: "text", text: JSON.stringify(wlans, null, 2) }] };
+});
+server.registerTool("list_rogue_aps", {
+    title: "List Rogue Access Points",
+    description: "Lists rogue access points detected by the WLC, including MAC, SSID, classification and state.",
+    inputSchema: {},
+}, async () => {
+    const rogueAps = await listRogueAps(restconf);
+    return { content: [{ type: "text", text: JSON.stringify(rogueAps, null, 2) }] };
 });
 server.registerTool("restconf_get", {
     title: "Raw RESTCONF GET",
