@@ -1,0 +1,29 @@
+{
+  "name": "cisco-wlc-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Cisco Catalyst 9800 WLC (RESTCONF, read-only)",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "cisco-wlc-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "prepack": "npm run build",
+    "release": "release-script"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "axios": "^1.7.9",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3",
+    "@alcalzone/release-script": "^5.2.1",
+    "@alcalzone/release-script-plugin-license": "^5.2.0",
+    "@alcalzone/release-script-plugin-manual-review": "^5.2.0"
+  }
+}
