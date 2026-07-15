@@ -1,1 +1,3 @@
-mcp.json
+.mcp.json
+node_modules/
+coverage/

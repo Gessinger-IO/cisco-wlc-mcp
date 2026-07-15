@@ -126,9 +126,7 @@ export interface WlanSummary {
 }
 
 export async function listWlans(client: RestconfClient): Promise<WlanSummary[]> {
-  const data = await client.get(
-    "Cisco-IOS-XE-wireless-wlan-cfg:wlan-cfg-data/wlan-cfg-entries"
-  );
+  const data = await client.get("Cisco-IOS-XE-wireless-wlan-cfg:wlan-cfg-data/wlan-cfg-entries");
   const entries = asArray(firstContainerValue(data));
 
   return entries.map((entry) => ({

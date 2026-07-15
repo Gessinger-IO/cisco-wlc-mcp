@@ -42,7 +42,7 @@ export class RestconfClient {
             if (axios.isAxiosError(error)) {
                 const status = error.response?.status;
                 const body = error.response?.data;
-                throw new Error(`RESTCONF GET ${path} failed${status ? ` (HTTP ${status})` : ""}: ${typeof body === "object" ? JSON.stringify(body) : error.message}`);
+                throw new Error(`RESTCONF GET ${path} failed${status ? ` (HTTP ${status})` : ""}: ${typeof body === "object" ? JSON.stringify(body) : error.message}`, { cause: error });
             }
             throw error;
         }

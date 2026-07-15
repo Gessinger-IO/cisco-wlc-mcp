@@ -15,9 +15,7 @@ export function loadConfigFromEnv(): WlcConfig {
   const password = process.env.WLC_PASSWORD;
 
   if (!host || !username || !password) {
-    throw new Error(
-      "Missing required environment variables: WLC_HOST, WLC_USERNAME, WLC_PASSWORD"
-    );
+    throw new Error("Missing required environment variables: WLC_HOST, WLC_USERNAME, WLC_PASSWORD");
   }
 
   return {
@@ -56,11 +54,12 @@ export class RestconfClient {
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
-        const body = error.response?.data;
+        const body: unknown = error.response?.data;
         throw new Error(
           `RESTCONF GET ${path} failed${status ? ` (HTTP ${status})` : ""}: ${
             typeof body === "object" ? JSON.stringify(body) : error.message
-          }`
+          }`,
+          { cause: error }
         );
       }
       throw error;

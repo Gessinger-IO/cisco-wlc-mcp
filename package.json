@@ -12,7 +12,14 @@
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "prepack": "npm run build",
-    "release": "release-script"
+    "release": "release-script",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit -p tsconfig.eslint.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
@@ -24,6 +31,12 @@
     "typescript": "^5.7.3",
     "@alcalzone/release-script": "^5.2.1",
     "@alcalzone/release-script-plugin-license": "^5.2.0",
-    "@alcalzone/release-script-plugin-manual-review": "^5.2.0"
+    "@alcalzone/release-script-plugin-manual-review": "^5.2.0",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.7.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.5",
+    "typescript-eslint": "^8.64.0",
+    "vitest": "^4.1.10"
   }
 }
