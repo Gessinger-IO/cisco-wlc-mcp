@@ -3,7 +3,7 @@
     Placeholder for the next version (at the beginning of the line):
     ## **WORK IN PROGRESS**
 -->
-## **WORK IN PROGRESS**
+## 0.2.0 (2026-07-15)
 * added `list_policy_profiles` tool — Policy Profiles (name, VLAN interface) together with the WLAN
   profiles mapped to them via each Policy Tag (`wlan-policies` + `policy-list-entries`)
 
