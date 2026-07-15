@@ -23,6 +23,28 @@ RESTCONF muss auf dem WLC aktiviert sein (`restconf` im Config-Mode).
 
 ## MCP-Client-Config (Beispiel)
 
+Für normale Nutzung reicht das npm-Paket, ohne lokalen Checkout:
+
+```json
+{
+  "mcpServers": {
+    "cisco-wlc": {
+      "command": "npx",
+      "args": ["-y", "cisco-wlc-mcp"],
+      "env": {
+        "WLC_HOST": "192.0.2.10",
+        "WLC_USERNAME": "restconf-user",
+        "WLC_PASSWORD": "changeme",
+        "WLC_INSECURE_TLS": "true"
+      }
+    }
+  }
+}
+```
+
+Für die Entwicklung an diesem Repo lieber den lokalen Build direkt referenzieren — `npx` würde sonst
+immer den zuletzt auf npm veröffentlichten Stand ziehen, nicht den lokalen:
+
 ```json
 {
   "mcpServers": {
