@@ -3,7 +3,7 @@
     Placeholder for the next version (at the beginning of the line):
     ## **WORK IN PROGRESS**
 -->
-## **WORK IN PROGRESS**
+## 0.3.0 (2026-07-15)
 * (list_wireless_clients) added RF diagnostics: `channel`, `band`, `securityMode` (from `dot11-oper-data`)
   and `rssi`, `snr`, `dataRate`, `phyRateMbps`, `spatialStreams` (from `traffic-stats`)
 * added `list_ap_radios` tool — per-radio band, channel, channel width, TX power level, admin/oper state
