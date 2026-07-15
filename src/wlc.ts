@@ -91,31 +91,124 @@ async function buildIpv4Map(client: RestconfClient): Promise<Map<string, string>
   return map;
 }
 
+interface RadioInfo {
+  channel?: number;
+  band?: string;
+  securityMode?: string;
+}
+
+/** Maps the wireless YANG's radio-type enum to a human-readable band. Unknown values pass through as-is. */
+const RADIO_BAND_LABELS: Record<string, string> = {
+  "dot11-radio-type-bg": "2.4GHz",
+  "dot11-radio-type-a": "5GHz",
+  "dot11-radio-type-6ghz": "6GHz",
+};
+
+function radioBandLabel(radioType: unknown): string | undefined {
+  if (typeof radioType !== "string") return undefined;
+  return RADIO_BAND_LABELS[radioType] ?? radioType;
+}
+
+/** Best-effort client-mac -> channel/band/security lookup. Returns an empty map if the path doesn't exist on this device. */
+async function buildRadioMap(client: RestconfClient): Promise<Map<string, RadioInfo>> {
+  const map = new Map<string, RadioInfo>();
+  let data: unknown;
+  try {
+    data = await client.get("Cisco-IOS-XE-wireless-client-oper:client-oper-data/dot11-oper-data");
+  } catch {
+    return map;
+  }
+  const entries = asArray(firstContainerValue(data));
+  for (const entry of entries) {
+    const mac = pick(entry, "ms-mac-address") as string | undefined;
+    if (!mac) continue;
+    map.set(mac, {
+      channel: pick(entry, "current-channel") as number | undefined,
+      band: radioBandLabel(pick(entry, "radio-type")),
+      securityMode: pick(entry, "security-mode") as string | undefined,
+    });
+  }
+  return map;
+}
+
+interface SignalInfo {
+  rssi?: number;
+  snr?: number;
+  dataRate?: string;
+  phyRateMbps?: number;
+  spatialStreams?: number;
+}
+
+/** Best-effort client-mac -> RSSI/SNR/rate lookup. Returns an empty map if the path doesn't exist on this device. */
+async function buildSignalMap(client: RestconfClient): Promise<Map<string, SignalInfo>> {
+  const map = new Map<string, SignalInfo>();
+  let data: unknown;
+  try {
+    data = await client.get("Cisco-IOS-XE-wireless-client-oper:client-oper-data/traffic-stats");
+  } catch {
+    return map;
+  }
+  const entries = asArray(firstContainerValue(data));
+  for (const entry of entries) {
+    const mac = pick(entry, "ms-mac-address") as string | undefined;
+    if (!mac) continue;
+    map.set(mac, {
+      rssi: pick(entry, "most-recent-rssi") as number | undefined,
+      snr: pick(entry, "most-recent-snr") as number | undefined,
+      dataRate: pick(entry, "current-rate") as string | undefined,
+      phyRateMbps: pick(entry, "speed") as number | undefined,
+      spatialStreams: pick(entry, "spatial-stream") as number | undefined,
+    });
+  }
+  return map;
+}
+
 export interface WirelessClientSummary {
   clientMac?: string;
   apName?: string;
   connectionState?: string;
   wlanId?: unknown;
   ipv4Address?: string;
+  channel?: number;
+  band?: string;
+  securityMode?: string;
+  rssi?: number;
+  snr?: number;
+  dataRate?: string;
+  phyRateMbps?: number;
+  spatialStreams?: number;
 }
 
 export async function listWirelessClients(
   client: RestconfClient
 ): Promise<WirelessClientSummary[]> {
-  const [data, ipv4Map] = await Promise.all([
+  const [data, ipv4Map, radioMap, signalMap] = await Promise.all([
     client.get("Cisco-IOS-XE-wireless-client-oper:client-oper-data/common-oper-data"),
     buildIpv4Map(client),
+    buildRadioMap(client),
+    buildSignalMap(client),
   ]);
   const entries = asArray(firstContainerValue(data));
 
   return entries.map((entry) => {
     const clientMac = pick(entry, "client-mac") as string | undefined;
+    const radio = (clientMac && radioMap.get(clientMac)) || {};
+    const signal = (clientMac && signalMap.get(clientMac)) || {};
+
     return {
       clientMac,
       apName: pick(entry, "ap-name") as string | undefined,
       connectionState: pick(entry, "co-state", "client-state") as string | undefined,
       wlanId: pick(entry, "wlan-id"),
       ipv4Address: clientMac ? ipv4Map.get(clientMac) : undefined,
+      channel: radio.channel,
+      band: radio.band,
+      securityMode: radio.securityMode,
+      rssi: signal.rssi,
+      snr: signal.snr,
+      dataRate: signal.dataRate,
+      phyRateMbps: signal.phyRateMbps,
+      spatialStreams: signal.spatialStreams,
     };
   });
 }

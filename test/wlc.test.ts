@@ -123,6 +123,56 @@ describe("listWirelessClients", () => {
     ]);
   });
 
+  it("joins RF diagnostics from dot11-oper-data and traffic-stats, mapping radio-type to a band", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-client-oper:client-oper-data/common-oper-data": {
+        "common-oper-data": [{ "client-mac": "11:22:33:44:55:66", "ap-name": "AP1" }],
+      },
+      "Cisco-IOS-XE-wireless-client-oper:client-oper-data/sisf-db-mac": {
+        "sisf-db-mac": [],
+      },
+      "Cisco-IOS-XE-wireless-client-oper:client-oper-data/dot11-oper-data": {
+        "dot11-oper-data": [
+          {
+            "ms-mac-address": "11:22:33:44:55:66",
+            "current-channel": 44,
+            "radio-type": "dot11-radio-type-a",
+            "security-mode": "ewlc-assoc-mode-wpa2",
+          },
+        ],
+      },
+      "Cisco-IOS-XE-wireless-client-oper:client-oper-data/traffic-stats": {
+        "traffic-stats": [
+          {
+            "ms-mac-address": "11:22:33:44:55:66",
+            "most-recent-rssi": -48,
+            "most-recent-snr": 44,
+            "current-rate": "m9 ss2",
+            speed: 400,
+            "spatial-stream": 2,
+          },
+        ],
+      },
+    });
+
+    const clients = await listWirelessClients(client);
+
+    expect(clients).toEqual([
+      {
+        clientMac: "11:22:33:44:55:66",
+        apName: "AP1",
+        channel: 44,
+        band: "5GHz",
+        securityMode: "ewlc-assoc-mode-wpa2",
+        rssi: -48,
+        snr: 44,
+        dataRate: "m9 ss2",
+        phyRateMbps: 400,
+        spatialStreams: 2,
+      },
+    ]);
+  });
+
   it("leaves ipv4Address undefined when the sisf-db-mac path is unavailable", async () => {
     const client = fakeClient({
       "Cisco-IOS-XE-wireless-client-oper:client-oper-data/common-oper-data": {

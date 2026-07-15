@@ -20,7 +20,8 @@ server.registerTool("list_access_points", {
 });
 server.registerTool("list_wireless_clients", {
     title: "List Wireless Clients",
-    description: "Lists wireless clients currently associated to the WLC, including MAC, connected AP, VLAN, and SSID.",
+    description: "Lists wireless clients currently associated to the WLC, including MAC, connected AP, WLAN, IPv4, " +
+        "and RF diagnostics (channel, band, RSSI, SNR, PHY rate, spatial streams, security mode).",
     inputSchema: {},
 }, async () => {
     const clients = await listWirelessClients(restconf);

@@ -38,7 +38,8 @@ server.registerTool(
   {
     title: "List Wireless Clients",
     description:
-      "Lists wireless clients currently associated to the WLC, including MAC, connected AP, VLAN, and SSID.",
+      "Lists wireless clients currently associated to the WLC, including MAC, connected AP, WLAN, IPv4, " +
+      "and RF diagnostics (channel, band, RSSI, SNR, PHY rate, spatial streams, security mode).",
     inputSchema: {},
   },
   async () => {

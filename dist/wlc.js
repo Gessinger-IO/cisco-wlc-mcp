@@ -77,20 +77,91 @@ async function buildIpv4Map(client) {
     }
     return map;
 }
+/** Maps the wireless YANG's radio-type enum to a human-readable band. Unknown values pass through as-is. */
+const RADIO_BAND_LABELS = {
+    "dot11-radio-type-bg": "2.4GHz",
+    "dot11-radio-type-a": "5GHz",
+    "dot11-radio-type-6ghz": "6GHz",
+};
+function radioBandLabel(radioType) {
+    if (typeof radioType !== "string")
+        return undefined;
+    return RADIO_BAND_LABELS[radioType] ?? radioType;
+}
+/** Best-effort client-mac -> channel/band/security lookup. Returns an empty map if the path doesn't exist on this device. */
+async function buildRadioMap(client) {
+    const map = new Map();
+    let data;
+    try {
+        data = await client.get("Cisco-IOS-XE-wireless-client-oper:client-oper-data/dot11-oper-data");
+    }
+    catch {
+        return map;
+    }
+    const entries = asArray(firstContainerValue(data));
+    for (const entry of entries) {
+        const mac = pick(entry, "ms-mac-address");
+        if (!mac)
+            continue;
+        map.set(mac, {
+            channel: pick(entry, "current-channel"),
+            band: radioBandLabel(pick(entry, "radio-type")),
+            securityMode: pick(entry, "security-mode"),
+        });
+    }
+    return map;
+}
+/** Best-effort client-mac -> RSSI/SNR/rate lookup. Returns an empty map if the path doesn't exist on this device. */
+async function buildSignalMap(client) {
+    const map = new Map();
+    let data;
+    try {
+        data = await client.get("Cisco-IOS-XE-wireless-client-oper:client-oper-data/traffic-stats");
+    }
+    catch {
+        return map;
+    }
+    const entries = asArray(firstContainerValue(data));
+    for (const entry of entries) {
+        const mac = pick(entry, "ms-mac-address");
+        if (!mac)
+            continue;
+        map.set(mac, {
+            rssi: pick(entry, "most-recent-rssi"),
+            snr: pick(entry, "most-recent-snr"),
+            dataRate: pick(entry, "current-rate"),
+            phyRateMbps: pick(entry, "speed"),
+            spatialStreams: pick(entry, "spatial-stream"),
+        });
+    }
+    return map;
+}
 export async function listWirelessClients(client) {
-    const [data, ipv4Map] = await Promise.all([
+    const [data, ipv4Map, radioMap, signalMap] = await Promise.all([
         client.get("Cisco-IOS-XE-wireless-client-oper:client-oper-data/common-oper-data"),
         buildIpv4Map(client),
+        buildRadioMap(client),
+        buildSignalMap(client),
     ]);
     const entries = asArray(firstContainerValue(data));
     return entries.map((entry) => {
         const clientMac = pick(entry, "client-mac");
+        const radio = (clientMac && radioMap.get(clientMac)) || {};
+        const signal = (clientMac && signalMap.get(clientMac)) || {};
         return {
             clientMac,
             apName: pick(entry, "ap-name"),
             connectionState: pick(entry, "co-state", "client-state"),
             wlanId: pick(entry, "wlan-id"),
             ipv4Address: clientMac ? ipv4Map.get(clientMac) : undefined,
+            channel: radio.channel,
+            band: radio.band,
+            securityMode: radio.securityMode,
+            rssi: signal.rssi,
+            snr: signal.snr,
+            dataRate: signal.dataRate,
+            phyRateMbps: signal.phyRateMbps,
+            spatialStreams: signal.spatialStreams,
         };
     });
 }
