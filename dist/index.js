@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { RestconfClient, loadConfigFromEnv } from "./restconf.js";
-import { listAccessPoints, listWirelessClients, listWlans, listRogueAps } from "./wlc.js";
+import { listAccessPoints, listWirelessClients, listWlans, listRogueAps, listPolicyProfiles, } from "./wlc.js";
 const config = loadConfigFromEnv();
 const restconf = new RestconfClient(config);
 const server = new McpServer({
@@ -33,6 +33,17 @@ server.registerTool("list_wlans", {
 }, async () => {
     const wlans = await listWlans(restconf);
     return { content: [{ type: "text", text: JSON.stringify(wlans, null, 2) }] };
+});
+server.registerTool("list_policy_profiles", {
+    title: "List Policy Profiles",
+    description: "Lists Policy Profiles configured on the WLC (name, VLAN interface) together with the WLAN " +
+        "profiles mapped to them via each Policy Tag — i.e. which SSID lands on which VLAN interface. " +
+        "Note that the mapping is per Policy Tag (assigned per-AP), so the same SSID can in principle " +
+        "resolve to a different Policy Profile depending on which AP/Policy Tag serves it.",
+    inputSchema: {},
+}, async () => {
+    const profiles = await listPolicyProfiles(restconf);
+    return { content: [{ type: "text", text: JSON.stringify(profiles, null, 2) }] };
 });
 server.registerTool("list_rogue_aps", {
     title: "List Rogue Access Points",

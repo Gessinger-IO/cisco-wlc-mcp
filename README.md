@@ -45,6 +45,7 @@ RESTCONF muss auf dem WLC aktiviert sein (`restconf` im Config-Mode).
 - `list_access_points` — verbundene APs (Name, MAC, IP, Modell)
 - `list_wireless_clients` — verbundene WLAN-Clients (MAC, AP-Name, WLAN-ID, IPv4, Status)
 - `list_wlans` — konfigurierte WLANs/SSIDs
+- `list_policy_profiles` — Policy Profiles (VLAN-Interface) inkl. Mapping über Policy Tags zu WLAN-Profilen
 - `list_rogue_aps` — erkannte Rogue APs (MAC, SSID, Klassifizierung, Status)
 - `restconf_get` — Fallback für rohe RESTCONF-GET-Abfragen auf beliebige YANG-Pfade
 

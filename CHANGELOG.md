@@ -3,6 +3,10 @@
     Placeholder for the next version (at the beginning of the line):
     ## **WORK IN PROGRESS**
 -->
+## **WORK IN PROGRESS**
+* added `list_policy_profiles` tool — Policy Profiles (name, VLAN interface) together with the WLAN
+  profiles mapped to them via each Policy Tag (`wlan-policies` + `policy-list-entries`)
+
 ## 0.1.3 (2026-07-15)
 * (list_access_points) fixed `model` extraction — actual field is `device-detail.static-info.ap-models.model`, not `board-data.wtp-model-number`
 * (list_access_points) fixed `softwareVersion` to return the flat `sw-version` string instead of the whole `wtp-version` object

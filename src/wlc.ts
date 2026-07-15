@@ -143,6 +143,62 @@ export async function listWlans(client: RestconfClient): Promise<WlanSummary[]> 
   });
 }
 
+export interface PolicyProfileMapping {
+  policyTagName?: string;
+  wlanProfileName?: string;
+}
+
+export interface PolicyProfileSummary {
+  name?: string;
+  interfaceName?: string;
+  enabled?: unknown;
+  mappings: PolicyProfileMapping[];
+}
+
+/**
+ * Policy Profiles carry the VLAN interface; which WLAN maps to which Policy Profile is decided
+ * per Policy Tag (assigned per-AP), not by the WLAN itself — so the same SSID can in principle
+ * land on different VLANs depending on which Policy Tag the serving AP has.
+ */
+export async function listPolicyProfiles(client: RestconfClient): Promise<PolicyProfileSummary[]> {
+  const [policiesData, tagsData] = await Promise.all([
+    client.get("Cisco-IOS-XE-wireless-wlan-cfg:wlan-cfg-data/wlan-policies"),
+    client.get("Cisco-IOS-XE-wireless-wlan-cfg:wlan-cfg-data/policy-list-entries"),
+  ]);
+
+  const profiles = asArray(firstContainerValue(policiesData));
+  const tags = asArray(firstContainerValue(tagsData));
+
+  const mappingsByProfile = new Map<string, PolicyProfileMapping[]>();
+  for (const tag of tags) {
+    const tagName = pick(tag, "tag-name") as string | undefined;
+    const wlanPolicies = asArray(pick(tag, "wlan-policies"));
+
+    for (const wlanPolicy of wlanPolicies) {
+      const policyProfileName = pick(wlanPolicy, "policy-profile-name") as string | undefined;
+      if (!policyProfileName) continue;
+
+      const mappings = mappingsByProfile.get(policyProfileName) ?? [];
+      mappings.push({
+        policyTagName: tagName,
+        wlanProfileName: pick(wlanPolicy, "wlan-profile-name") as string | undefined,
+      });
+      mappingsByProfile.set(policyProfileName, mappings);
+    }
+  }
+
+  return profiles.map((profile) => {
+    const name = pick(profile, "policy-profile-name") as string | undefined;
+
+    return {
+      name,
+      interfaceName: pick(profile, "interface-name") as string | undefined,
+      enabled: pick(profile, "status"),
+      mappings: (name && mappingsByProfile.get(name)) || [],
+    };
+  });
+}
+
 /** Some numeric YANG leafs (e.g. rssi) serialize as { val, num, den } instead of a plain number. */
 function numericVal(value: unknown): number | undefined {
   if (typeof value === "number") return value;

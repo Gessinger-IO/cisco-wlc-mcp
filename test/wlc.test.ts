@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { RestconfClient } from "../src/restconf.js";
-import { listAccessPoints, listWirelessClients, listWlans, listRogueAps } from "../src/wlc.js";
+import {
+  listAccessPoints,
+  listWirelessClients,
+  listWlans,
+  listRogueAps,
+  listPolicyProfiles,
+} from "../src/wlc.js";
 
 function fakeClient(responses: Record<string, unknown>): RestconfClient {
   const client = new RestconfClient({
@@ -189,6 +195,63 @@ describe("listRogueAps", () => {
         detectedBy: [{ apName: "AP1", rssi: -55 }],
         firstSeen: undefined,
         lastSeen: undefined,
+      },
+    ]);
+  });
+});
+
+describe("listPolicyProfiles", () => {
+  it("attaches wlan/policy-tag mappings gathered from policy-list-entries to each profile", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-wlan-cfg:wlan-cfg-data/wlan-policies": {
+        "wlan-policies": {
+          "wlan-policy": [
+            { "policy-profile-name": "smarthome", status: true, "interface-name": "smarthome" },
+            {
+              "policy-profile-name": "guest-network",
+              status: true,
+              "interface-name": "WLAN-Guest",
+            },
+          ],
+        },
+      },
+      "Cisco-IOS-XE-wireless-wlan-cfg:wlan-cfg-data/policy-list-entries": {
+        "policy-list-entries": {
+          "policy-list-entry": [
+            {
+              "tag-name": "Tag_Keller",
+              "wlan-policies": {
+                "wlan-policy": [
+                  { "wlan-profile-name": "household", "policy-profile-name": "smarthome" },
+                  { "wlan-profile-name": "smarthome", "policy-profile-name": "smarthome" },
+                ],
+              },
+            },
+            {
+              "tag-name": "default-policy-tag",
+            },
+          ],
+        },
+      },
+    });
+
+    const profiles = await listPolicyProfiles(client);
+
+    expect(profiles).toEqual([
+      {
+        name: "smarthome",
+        interfaceName: "smarthome",
+        enabled: true,
+        mappings: [
+          { policyTagName: "Tag_Keller", wlanProfileName: "household" },
+          { policyTagName: "Tag_Keller", wlanProfileName: "smarthome" },
+        ],
+      },
+      {
+        name: "guest-network",
+        interfaceName: "WLAN-Guest",
+        enabled: true,
+        mappings: [],
       },
     ]);
   });
