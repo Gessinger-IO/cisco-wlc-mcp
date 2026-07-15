@@ -27,9 +27,10 @@ describe("listAccessPoints", () => {
             "wtp-mac": "aa:bb:cc:dd:ee:ff",
             "ip-addr": "10.0.0.5",
             "device-detail": {
-              "wtp-version": "17.9.1",
+              "wtp-version": { "sw-version": "17.9.1" },
               "static-info": {
                 "board-data": { "wtp-model-number": "9130AXI" },
+                "ap-models": { model: "AIR-AP1852I-E-K9" },
               },
             },
           },
@@ -44,10 +45,29 @@ describe("listAccessPoints", () => {
         name: "AP1",
         wtpMac: "aa:bb:cc:dd:ee:ff",
         ipAddr: "10.0.0.5",
-        model: "9130AXI",
+        model: "AIR-AP1852I-E-K9",
         softwareVersion: "17.9.1",
       },
     ]);
+  });
+
+  it("falls back to board-data's wtp-model-number when ap-models is absent", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data": {
+        "Cisco-IOS-XE-wireless-access-point-oper:capwap-data": [
+          {
+            name: "AP1",
+            "device-detail": {
+              "static-info": { "board-data": { "wtp-model-number": "9130AXI" } },
+            },
+          },
+        ],
+      },
+    });
+
+    const aps = await listAccessPoints(client);
+
+    expect(aps[0].model).toBe("9130AXI");
   });
 
   it("returns an empty list when there are no entries", async () => {
@@ -118,12 +138,16 @@ describe("listWirelessClients", () => {
 });
 
 describe("listWlans", () => {
-  it("unwraps a list nested one level deeper than the container", async () => {
+  it("unwraps a list nested one level deeper than the container and reads ssid/status from apf-vap-id-data", async () => {
     const client = fakeClient({
       "Cisco-IOS-XE-wireless-wlan-cfg:wlan-cfg-data/wlan-cfg-entries": {
         "wlan-cfg-entries": {
           "wlan-cfg-entry": [
-            { "wlan-id": 1, "profile-name": "corp", ssid: "Corp-WLAN", enable: true },
+            {
+              "wlan-id": 1,
+              "profile-name": "corp",
+              "apf-vap-id-data": { ssid: "Corp-WLAN", "wlan-status": true },
+            },
           ],
         },
       },

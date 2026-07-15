@@ -34,12 +34,14 @@ export async function listAccessPoints(client) {
         const deviceDetail = entry["device-detail"] ?? {};
         const staticInfo = deviceDetail["static-info"] ?? {};
         const boardData = staticInfo["board-data"] ?? {};
+        const apModels = staticInfo["ap-models"] ?? {};
+        const wtpVersion = deviceDetail["wtp-version"] ?? {};
         return {
             name: pick(entry, "name", "ap-name"),
             wtpMac: pick(entry, "wtp-mac"),
             ipAddr: pick(entry, "ip-addr"),
-            model: pick(boardData, "wtp-model-number"),
-            softwareVersion: pick(deviceDetail, "wtp-version", "sw-version"),
+            model: (pick(apModels, "model") ?? pick(boardData, "wtp-model-number")),
+            softwareVersion: pick(wtpVersion, "sw-version"),
         };
     });
 }
@@ -95,12 +97,15 @@ export async function listWirelessClients(client) {
 export async function listWlans(client) {
     const data = await client.get("Cisco-IOS-XE-wireless-wlan-cfg:wlan-cfg-data/wlan-cfg-entries");
     const entries = asArray(firstContainerValue(data));
-    return entries.map((entry) => ({
-        wlanId: pick(entry, "wlan-id"),
-        profileName: pick(entry, "profile-name"),
-        ssid: pick(entry, "ssid"),
-        enabled: pick(entry, "enable", "is-enabled"),
-    }));
+    return entries.map((entry) => {
+        const vapIdData = entry["apf-vap-id-data"] ?? {};
+        return {
+            wlanId: pick(entry, "wlan-id"),
+            profileName: pick(entry, "profile-name"),
+            ssid: pick(vapIdData, "ssid"),
+            enabled: pick(vapIdData, "wlan-status", "enable", "is-enabled"),
+        };
+    });
 }
 /** Some numeric YANG leafs (e.g. rssi) serialize as { val, num, den } instead of a plain number. */
 function numericVal(value) {

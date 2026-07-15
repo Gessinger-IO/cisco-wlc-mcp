@@ -3,6 +3,11 @@
     Placeholder for the next version (at the beginning of the line):
     ## **WORK IN PROGRESS**
 -->
+## **WORK IN PROGRESS**
+* (list_access_points) fixed `model` extraction — actual field is `device-detail.static-info.ap-models.model`, not `board-data.wtp-model-number`
+* (list_access_points) fixed `softwareVersion` to return the flat `sw-version` string instead of the whole `wtp-version` object
+* (list_wlans) fixed `ssid` and `enabled` extraction — both are nested under `apf-vap-id-data`, not directly on the entry
+
 ## 0.1.2 (2026-07-14)
 * (list_wireless_clients) fixed field extraction to match the actual `common-oper-data` schema (`ap-name`, `wlan-id` instead of guessed `ap-mac`/`ssid`/`vlan-id`)
 * (list_wireless_clients) added `ipv4Address`, resolved via a `sisf-db-mac` lookup joined on client MAC

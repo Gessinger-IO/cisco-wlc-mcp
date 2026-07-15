@@ -47,13 +47,15 @@ export async function listAccessPoints(client: RestconfClient): Promise<AccessPo
     const deviceDetail = (entry["device-detail"] as Record<string, unknown>) ?? {};
     const staticInfo = (deviceDetail["static-info"] as Record<string, unknown>) ?? {};
     const boardData = (staticInfo["board-data"] as Record<string, unknown>) ?? {};
+    const apModels = (staticInfo["ap-models"] as Record<string, unknown>) ?? {};
+    const wtpVersion = (deviceDetail["wtp-version"] as Record<string, unknown>) ?? {};
 
     return {
       name: pick(entry, "name", "ap-name") as string | undefined,
       wtpMac: pick(entry, "wtp-mac") as string | undefined,
       ipAddr: pick(entry, "ip-addr") as string | undefined,
-      model: pick(boardData, "wtp-model-number") as string | undefined,
-      softwareVersion: pick(deviceDetail, "wtp-version", "sw-version") as string | undefined,
+      model: (pick(apModels, "model") ?? pick(boardData, "wtp-model-number")) as string | undefined,
+      softwareVersion: pick(wtpVersion, "sw-version") as string | undefined,
     };
   });
 }
@@ -129,12 +131,16 @@ export async function listWlans(client: RestconfClient): Promise<WlanSummary[]> 
   const data = await client.get("Cisco-IOS-XE-wireless-wlan-cfg:wlan-cfg-data/wlan-cfg-entries");
   const entries = asArray(firstContainerValue(data));
 
-  return entries.map((entry) => ({
-    wlanId: pick(entry, "wlan-id"),
-    profileName: pick(entry, "profile-name") as string | undefined,
-    ssid: pick(entry, "ssid") as string | undefined,
-    enabled: pick(entry, "enable", "is-enabled"),
-  }));
+  return entries.map((entry) => {
+    const vapIdData = (entry["apf-vap-id-data"] as Record<string, unknown>) ?? {};
+
+    return {
+      wlanId: pick(entry, "wlan-id"),
+      profileName: pick(entry, "profile-name") as string | undefined,
+      ssid: pick(vapIdData, "ssid") as string | undefined,
+      enabled: pick(vapIdData, "wlan-status", "enable", "is-enabled"),
+    };
+  });
 }
 
 /** Some numeric YANG leafs (e.g. rssi) serialize as { val, num, den } instead of a plain number. */
