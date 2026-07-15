@@ -6,6 +6,9 @@
 ## **WORK IN PROGRESS**
 * (list_wireless_clients) added RF diagnostics: `channel`, `band`, `securityMode` (from `dot11-oper-data`)
   and `rssi`, `snr`, `dataRate`, `phyRateMbps`, `spatialStreams` (from `traffic-stats`)
+* added `list_ap_radios` tool — per-radio band, channel, channel width, TX power level, admin/oper state
+  (`radio-oper-data`), plus channel utilization, client count, and noise floor on the current channel
+  (`rrm-oper-data/rrm-measurement`)
 
 ## 0.2.0 (2026-07-15)
 * added `list_policy_profiles` tool — Policy Profiles (name, VLAN interface) together with the WLAN

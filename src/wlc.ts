@@ -339,3 +339,136 @@ export async function listRogueAps(client: RestconfClient): Promise<RogueApSumma
     lastSeen: pick(entry, "rogue-last-timestamp") as string | undefined,
   }));
 }
+
+function radioKey(wtpMac: string, radioSlotId: unknown): string {
+  return `${wtpMac}|${String(radioSlotId)}`;
+}
+
+/** Maps the AP radio-oper-data band enum to a human-readable band. Unknown values pass through as-is. */
+const ACTIVE_BAND_LABELS: Record<string, string> = {
+  "dot11-2-dot-4-ghz-band": "2.4GHz",
+  "dot11-5-ghz-band": "5GHz",
+  "dot11-6-ghz-band": "6GHz",
+};
+
+function activeBandLabel(band: unknown): string | undefined {
+  if (typeof band !== "string") return undefined;
+  return ACTIVE_BAND_LABELS[band] ?? band;
+}
+
+/** Best-effort wtp-mac -> AP name lookup. Returns an empty map if the path doesn't exist on this device. */
+async function buildApNameMap(client: RestconfClient): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  let data: unknown;
+  try {
+    data = await client.get(
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data"
+    );
+  } catch {
+    return map;
+  }
+  const entries = asArray(firstContainerValue(data));
+  for (const entry of entries) {
+    const mac = pick(entry, "wtp-mac") as string | undefined;
+    const name = pick(entry, "name", "ap-name") as string | undefined;
+    if (mac && name) map.set(mac, name);
+  }
+  return map;
+}
+
+interface RrmLoadInfo {
+  channelUtilizationPercent?: number;
+  clientCount?: number;
+  noiseByChannel: Map<number, number>;
+}
+
+/** Best-effort (wtp-mac, radio-slot) -> channel load/noise lookup. Returns an empty map if the path doesn't exist on this device. */
+async function buildRrmMap(client: RestconfClient): Promise<Map<string, RrmLoadInfo>> {
+  const map = new Map<string, RrmLoadInfo>();
+  let data: unknown;
+  try {
+    data = await client.get("Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/rrm-measurement");
+  } catch {
+    return map;
+  }
+  const entries = asArray(firstContainerValue(data));
+  for (const entry of entries) {
+    const wtpMac = pick(entry, "wtp-mac") as string | undefined;
+    if (!wtpMac) continue;
+    const radioSlotId = pick(entry, "radio-slot-id");
+
+    const load = (entry["load"] as Record<string, unknown>) ?? {};
+    const noiseContainer = (entry["noise"] as Record<string, unknown>)?.["noise"] as
+      Record<string, unknown> | undefined;
+    const noiseByChannel = new Map<number, number>();
+    for (const chanNoise of asArray(pick(noiseContainer ?? {}, "noise-data"))) {
+      const chan = pick(chanNoise, "chan") as number | undefined;
+      const noise = pick(chanNoise, "noise") as number | undefined;
+      if (chan !== undefined && noise !== undefined) noiseByChannel.set(chan, noise);
+    }
+
+    map.set(radioKey(wtpMac, radioSlotId), {
+      channelUtilizationPercent: pick(load, "cca-util-percentage") as number | undefined,
+      clientCount: pick(load, "stations") as number | undefined,
+      noiseByChannel,
+    });
+  }
+  return map;
+}
+
+export interface ApRadioSummary {
+  apName?: string;
+  wtpMac?: string;
+  radioSlotId?: unknown;
+  band?: string;
+  channel?: number;
+  channelWidthMhz?: number;
+  txPowerLevel?: number;
+  adminState?: string;
+  operState?: string;
+  channelUtilizationPercent?: number;
+  clientCount?: number;
+  noiseFloor?: number;
+}
+
+export async function listApRadios(client: RestconfClient): Promise<ApRadioSummary[]> {
+  const [data, apNameMap, rrmMap] = await Promise.all([
+    client.get("Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/radio-oper-data"),
+    buildApNameMap(client),
+    buildRrmMap(client),
+  ]);
+  const entries = asArray(firstContainerValue(data));
+
+  return entries.map((entry) => {
+    const wtpMac = pick(entry, "wtp-mac") as string | undefined;
+    const radioSlotId = pick(entry, "radio-slot-id");
+
+    const phyHtCfg =
+      ((entry["phy-ht-cfg"] as Record<string, unknown>)?.["cfg-data"] as Record<string, unknown>) ??
+      {};
+    const bandInfo = asArray(pick(entry, "radio-band-info"))[0] ?? {};
+    const txPwrCfg =
+      ((bandInfo["phy-tx-pwr-cfg"] as Record<string, unknown>)?.["cfg-data"] as Record<
+        string,
+        unknown
+      >) ?? {};
+    const channel = pick(phyHtCfg, "curr-freq") as number | undefined;
+
+    const rrm = wtpMac ? rrmMap.get(radioKey(wtpMac, radioSlotId)) : undefined;
+
+    return {
+      apName: wtpMac ? apNameMap.get(wtpMac) : undefined,
+      wtpMac,
+      radioSlotId,
+      band: activeBandLabel(pick(entry, "current-active-band")),
+      channel,
+      channelWidthMhz: pick(phyHtCfg, "chan-width") as number | undefined,
+      txPowerLevel: pick(txPwrCfg, "current-tx-power-level") as number | undefined,
+      adminState: pick(entry, "admin-state") as string | undefined,
+      operState: pick(entry, "oper-state") as string | undefined,
+      channelUtilizationPercent: rrm?.channelUtilizationPercent,
+      clientCount: rrm?.clientCount,
+      noiseFloor: channel !== undefined ? rrm?.noiseByChannel.get(channel) : undefined,
+    };
+  });
+}

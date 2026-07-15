@@ -244,3 +244,101 @@ export async function listRogueAps(client) {
         lastSeen: pick(entry, "rogue-last-timestamp"),
     }));
 }
+function radioKey(wtpMac, radioSlotId) {
+    return `${wtpMac}|${String(radioSlotId)}`;
+}
+/** Maps the AP radio-oper-data band enum to a human-readable band. Unknown values pass through as-is. */
+const ACTIVE_BAND_LABELS = {
+    "dot11-2-dot-4-ghz-band": "2.4GHz",
+    "dot11-5-ghz-band": "5GHz",
+    "dot11-6-ghz-band": "6GHz",
+};
+function activeBandLabel(band) {
+    if (typeof band !== "string")
+        return undefined;
+    return ACTIVE_BAND_LABELS[band] ?? band;
+}
+/** Best-effort wtp-mac -> AP name lookup. Returns an empty map if the path doesn't exist on this device. */
+async function buildApNameMap(client) {
+    const map = new Map();
+    let data;
+    try {
+        data = await client.get("Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data");
+    }
+    catch {
+        return map;
+    }
+    const entries = asArray(firstContainerValue(data));
+    for (const entry of entries) {
+        const mac = pick(entry, "wtp-mac");
+        const name = pick(entry, "name", "ap-name");
+        if (mac && name)
+            map.set(mac, name);
+    }
+    return map;
+}
+/** Best-effort (wtp-mac, radio-slot) -> channel load/noise lookup. Returns an empty map if the path doesn't exist on this device. */
+async function buildRrmMap(client) {
+    const map = new Map();
+    let data;
+    try {
+        data = await client.get("Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/rrm-measurement");
+    }
+    catch {
+        return map;
+    }
+    const entries = asArray(firstContainerValue(data));
+    for (const entry of entries) {
+        const wtpMac = pick(entry, "wtp-mac");
+        if (!wtpMac)
+            continue;
+        const radioSlotId = pick(entry, "radio-slot-id");
+        const load = entry["load"] ?? {};
+        const noiseContainer = entry["noise"]?.["noise"];
+        const noiseByChannel = new Map();
+        for (const chanNoise of asArray(pick(noiseContainer ?? {}, "noise-data"))) {
+            const chan = pick(chanNoise, "chan");
+            const noise = pick(chanNoise, "noise");
+            if (chan !== undefined && noise !== undefined)
+                noiseByChannel.set(chan, noise);
+        }
+        map.set(radioKey(wtpMac, radioSlotId), {
+            channelUtilizationPercent: pick(load, "cca-util-percentage"),
+            clientCount: pick(load, "stations"),
+            noiseByChannel,
+        });
+    }
+    return map;
+}
+export async function listApRadios(client) {
+    const [data, apNameMap, rrmMap] = await Promise.all([
+        client.get("Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/radio-oper-data"),
+        buildApNameMap(client),
+        buildRrmMap(client),
+    ]);
+    const entries = asArray(firstContainerValue(data));
+    return entries.map((entry) => {
+        const wtpMac = pick(entry, "wtp-mac");
+        const radioSlotId = pick(entry, "radio-slot-id");
+        const phyHtCfg = entry["phy-ht-cfg"]?.["cfg-data"] ??
+            {};
+        const bandInfo = asArray(pick(entry, "radio-band-info"))[0] ?? {};
+        const txPwrCfg = bandInfo["phy-tx-pwr-cfg"]?.["cfg-data"] ?? {};
+        const channel = pick(phyHtCfg, "curr-freq");
+        const rrm = wtpMac ? rrmMap.get(radioKey(wtpMac, radioSlotId)) : undefined;
+        return {
+            apName: wtpMac ? apNameMap.get(wtpMac) : undefined,
+            wtpMac,
+            radioSlotId,
+            band: activeBandLabel(pick(entry, "current-active-band")),
+            channel,
+            channelWidthMhz: pick(phyHtCfg, "chan-width"),
+            txPowerLevel: pick(txPwrCfg, "current-tx-power-level"),
+            adminState: pick(entry, "admin-state"),
+            operState: pick(entry, "oper-state"),
+            channelUtilizationPercent: rrm?.channelUtilizationPercent,
+            clientCount: rrm?.clientCount,
+            noiseFloor: channel !== undefined ? rrm?.noiseByChannel.get(channel) : undefined,
+        };
+    });
+}

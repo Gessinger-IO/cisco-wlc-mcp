@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { RestconfClient, loadConfigFromEnv } from "./restconf.js";
-import { listAccessPoints, listWirelessClients, listWlans, listRogueAps, listPolicyProfiles, } from "./wlc.js";
+import { listAccessPoints, listWirelessClients, listWlans, listRogueAps, listPolicyProfiles, listApRadios, } from "./wlc.js";
 const config = loadConfigFromEnv();
 const restconf = new RestconfClient(config);
 const server = new McpServer({
@@ -45,6 +45,16 @@ server.registerTool("list_policy_profiles", {
 }, async () => {
     const profiles = await listPolicyProfiles(restconf);
     return { content: [{ type: "text", text: JSON.stringify(profiles, null, 2) }] };
+});
+server.registerTool("list_ap_radios", {
+    title: "List AP Radios",
+    description: "Lists per-radio RF diagnostics for each access point: band, channel, channel width, TX power " +
+        "level, admin/oper state, channel utilization (CCA %), associated client count, and noise floor " +
+        "on the current channel. Useful for diagnosing coverage/interference issues.",
+    inputSchema: {},
+}, async () => {
+    const radios = await listApRadios(restconf);
+    return { content: [{ type: "text", text: JSON.stringify(radios, null, 2) }] };
 });
 server.registerTool("list_rogue_aps", {
     title: "List Rogue Access Points",

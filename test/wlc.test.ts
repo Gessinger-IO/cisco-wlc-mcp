@@ -6,6 +6,7 @@ import {
   listWlans,
   listRogueAps,
   listPolicyProfiles,
+  listApRadios,
 } from "../src/wlc.js";
 
 function fakeClient(responses: Record<string, unknown>): RestconfClient {
@@ -302,6 +303,67 @@ describe("listPolicyProfiles", () => {
         interfaceName: "WLAN-Guest",
         enabled: true,
         mappings: [],
+      },
+    ]);
+  });
+});
+
+describe("listApRadios", () => {
+  it("joins radio-oper-data with the AP name and RRM load/noise for the current channel", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/radio-oper-data": {
+        "radio-oper-data": [
+          {
+            "wtp-mac": "aa:bb:cc:dd:ee:ff",
+            "radio-slot-id": 1,
+            "current-active-band": "dot11-5-ghz-band",
+            "admin-state": "enabled",
+            "oper-state": "radio-up",
+            "phy-ht-cfg": { "cfg-data": { "curr-freq": 44, "chan-width": 40 } },
+            "radio-band-info": [
+              { "phy-tx-pwr-cfg": { "cfg-data": { "current-tx-power-level": 3 } } },
+            ],
+          },
+        ],
+      },
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data": {
+        "capwap-data": [{ "wtp-mac": "aa:bb:cc:dd:ee:ff", name: "AP1" }],
+      },
+      "Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/rrm-measurement": {
+        "rrm-measurement": [
+          {
+            "wtp-mac": "aa:bb:cc:dd:ee:ff",
+            "radio-slot-id": 1,
+            load: { "cca-util-percentage": 12, stations: 3 },
+            noise: {
+              noise: {
+                "noise-data": [
+                  { chan: 44, noise: -90 },
+                  { chan: 48, noise: -91 },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    const radios = await listApRadios(client);
+
+    expect(radios).toEqual([
+      {
+        apName: "AP1",
+        wtpMac: "aa:bb:cc:dd:ee:ff",
+        radioSlotId: 1,
+        band: "5GHz",
+        channel: 44,
+        channelWidthMhz: 40,
+        txPowerLevel: 3,
+        adminState: "enabled",
+        operState: "radio-up",
+        channelUtilizationPercent: 12,
+        clientCount: 3,
+        noiseFloor: -90,
       },
     ]);
   });
