@@ -7,6 +7,14 @@
   "bin": {
     "cisco-wlc-mcp": "dist/index.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gessinger-IO/cisco-wlc-mcp.git"
+  },
+  "homepage": "https://github.com/Gessinger-IO/cisco-wlc-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/Gessinger-IO/cisco-wlc-mcp/issues"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
