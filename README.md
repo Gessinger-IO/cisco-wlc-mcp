@@ -47,6 +47,7 @@ RESTCONF muss auf dem WLC aktiviert sein (`restconf` im Config-Mode).
 - `list_wlans` — konfigurierte WLANs/SSIDs
 - `list_policy_profiles` — Policy Profiles (VLAN-Interface) inkl. Mapping über Policy Tags zu WLAN-Profilen
 - `list_ap_radios` — Radio-Diagnose pro AP (Band, Kanal, Kanalbreite, TX-Power-Level, Admin/Oper-State, Channel-Utilization, Client-Count, Noise-Floor)
+- `get_wlc_health` — Controller-Health (CPU, Memory, Uptime, Software-Version, Reboot-Grund, verbundene APs, Radio-Status, fehlkonfigurierte APs)
 - `list_rogue_aps` — erkannte Rogue APs (MAC, SSID, Klassifizierung, Status)
 - `restconf_get` — Fallback für rohe RESTCONF-GET-Abfragen auf beliebige YANG-Pfade
 

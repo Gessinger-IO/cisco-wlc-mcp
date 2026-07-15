@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { RestconfClient, loadConfigFromEnv } from "./restconf.js";
-import { listAccessPoints, listWirelessClients, listWlans, listRogueAps, listPolicyProfiles, listApRadios, } from "./wlc.js";
+import { listAccessPoints, listWirelessClients, listWlans, listRogueAps, listPolicyProfiles, listApRadios, getWlcHealth, } from "./wlc.js";
 const config = loadConfigFromEnv();
 const restconf = new RestconfClient(config);
 const server = new McpServer({
@@ -63,6 +63,16 @@ server.registerTool("list_rogue_aps", {
 }, async () => {
     const rogueAps = await listRogueAps(restconf);
     return { content: [{ type: "text", text: JSON.stringify(rogueAps, null, 2) }] };
+});
+server.registerTool("get_wlc_health", {
+    title: "Get WLC Health",
+    description: "Reports controller-level health: CPU utilization (5s/1min/5min), memory usage, uptime, " +
+        "software version, last reboot reason, joined AP count, radio up/down counts, and " +
+        "misconfigured AP count.",
+    inputSchema: {},
+}, async () => {
+    const health = await getWlcHealth(restconf);
+    return { content: [{ type: "text", text: JSON.stringify(health, null, 2) }] };
 });
 server.registerTool("restconf_get", {
     title: "Raw RESTCONF GET",

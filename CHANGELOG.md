@@ -9,6 +9,9 @@
 * added `list_ap_radios` tool — per-radio band, channel, channel width, TX power level, admin/oper state
   (`radio-oper-data`), plus channel utilization, client count, and noise floor on the current channel
   (`rrm-oper-data/rrm-measurement`)
+* added `get_wlc_health` tool — CPU (`process-cpu-oper`), memory (`memory-oper`), uptime/software
+  version/reboot reason (`device-hardware-oper`), and joined AP count/radio up-down/misconfigured AP
+  count (`wireless-ap-global-oper`)
 
 ## 0.2.0 (2026-07-15)
 * added `list_policy_profiles` tool — Policy Profiles (name, VLAN interface) together with the WLAN

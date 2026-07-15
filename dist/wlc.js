@@ -342,3 +342,45 @@ export async function listApRadios(client) {
         };
     });
 }
+export async function getWlcHealth(client) {
+    const [cpuData, memoryData, hardwareData, radioStatsData, joinCountData] = await Promise.all([
+        client.get("Cisco-IOS-XE-process-cpu-oper:cpu-usage/cpu-utilization?fields=five-seconds;one-minute;five-minutes"),
+        client.get("Cisco-IOS-XE-memory-oper:memory-statistics"),
+        client.get("Cisco-IOS-XE-device-hardware-oper:device-hardware-data"),
+        client.get("Cisco-IOS-XE-wireless-ap-global-oper:ap-global-oper-data/ewlc-ap-stats"),
+        client.get("Cisco-IOS-XE-wireless-ap-global-oper:ap-global-oper-data/emltd-join-count-stat"),
+    ]);
+    const cpu = firstContainerValue(cpuData) ?? {};
+    const memoryStats = asArray(pick(firstContainerValue(memoryData), "memory-statistic"));
+    const processorMemory = memoryStats.find((entry) => pick(entry, "name") === "Processor") ?? {};
+    const memoryTotal = Number(pick(processorMemory, "total-memory"));
+    const memoryUsed = Number(pick(processorMemory, "used-memory"));
+    const deviceHardware = firstContainerValue(hardwareData)?.["device-hardware"] ?? {};
+    const systemData = deviceHardware["device-system-data"] ?? {};
+    const bootTime = pick(systemData, "boot-time");
+    const currentTime = pick(systemData, "current-time");
+    const softwareVersion = pick(systemData, "software-version");
+    const radioStats = firstContainerValue(radioStatsData) ?? {};
+    const allRadios = radioStats["stats-80211-all-rad"] ?? {};
+    const joinCount = firstContainerValue(joinCountData) ?? {};
+    return {
+        cpuFiveSecPercent: pick(cpu, "five-seconds"),
+        cpuOneMinPercent: pick(cpu, "one-minute"),
+        cpuFiveMinPercent: pick(cpu, "five-minutes"),
+        memoryTotalBytes: Number.isFinite(memoryTotal) ? memoryTotal : undefined,
+        memoryUsedBytes: Number.isFinite(memoryUsed) ? memoryUsed : undefined,
+        memoryUsedPercent: Number.isFinite(memoryTotal) && memoryTotal > 0 && Number.isFinite(memoryUsed)
+            ? Math.round((memoryUsed / memoryTotal) * 1000) / 10
+            : undefined,
+        bootTime,
+        uptimeSeconds: bootTime && currentTime
+            ? Math.round((Date.parse(currentTime) - Date.parse(bootTime)) / 1000)
+            : undefined,
+        softwareVersion: softwareVersion?.split("\n")[0],
+        lastRebootReason: pick(systemData, "last-reboot-reason"),
+        joinedApCount: pick(joinCount, "joined-aps-count"),
+        radiosUp: pick(allRadios, "radios-up"),
+        radiosDown: pick(allRadios, "radios-down"),
+        misconfiguredApCount: pick(radioStats, "stats-misconfigured-aps"),
+    };
+}

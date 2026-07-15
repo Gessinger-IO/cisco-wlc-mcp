@@ -10,6 +10,7 @@ import {
   listRogueAps,
   listPolicyProfiles,
   listApRadios,
+  getWlcHealth,
 } from "./wlc.js";
 
 const config = loadConfigFromEnv();
@@ -106,6 +107,22 @@ server.registerTool(
   async () => {
     const rogueAps = await listRogueAps(restconf);
     return { content: [{ type: "text", text: JSON.stringify(rogueAps, null, 2) }] };
+  }
+);
+
+server.registerTool(
+  "get_wlc_health",
+  {
+    title: "Get WLC Health",
+    description:
+      "Reports controller-level health: CPU utilization (5s/1min/5min), memory usage, uptime, " +
+      "software version, last reboot reason, joined AP count, radio up/down counts, and " +
+      "misconfigured AP count.",
+    inputSchema: {},
+  },
+  async () => {
+    const health = await getWlcHealth(restconf);
+    return { content: [{ type: "text", text: JSON.stringify(health, null, 2) }] };
   }
 );
 

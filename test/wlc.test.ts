@@ -7,6 +7,7 @@ import {
   listRogueAps,
   listPolicyProfiles,
   listApRadios,
+  getWlcHealth,
 } from "../src/wlc.js";
 
 function fakeClient(responses: Record<string, unknown>): RestconfClient {
@@ -366,5 +367,64 @@ describe("listApRadios", () => {
         noiseFloor: -90,
       },
     ]);
+  });
+});
+
+describe("getWlcHealth", () => {
+  it("aggregates CPU, memory, uptime, and AP/radio stats from separate paths", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-process-cpu-oper:cpu-usage/cpu-utilization?fields=five-seconds;one-minute;five-minutes":
+        {
+          "cpu-utilization": { "five-seconds": 3, "one-minute": 5, "five-minutes": 7 },
+        },
+      "Cisco-IOS-XE-memory-oper:memory-statistics": {
+        "memory-statistics": {
+          "memory-statistic": [
+            { name: "Processor", "total-memory": "1000", "used-memory": "250" },
+            { name: "reserve Processor", "total-memory": "10", "used-memory": "1" },
+          ],
+        },
+      },
+      "Cisco-IOS-XE-device-hardware-oper:device-hardware-data": {
+        "device-hardware-data": {
+          "device-hardware": {
+            "device-system-data": {
+              "boot-time": "2026-01-01T00:00:00+00:00",
+              "current-time": "2026-01-02T00:00:00+00:00",
+              "software-version": "Cisco IOS Software, C9800-CL, Version 17.9.1\nCopyright...",
+              "last-reboot-reason": "reload",
+            },
+          },
+        },
+      },
+      "Cisco-IOS-XE-wireless-ap-global-oper:ap-global-oper-data/ewlc-ap-stats": {
+        "ewlc-ap-stats": {
+          "stats-80211-all-rad": { "radios-up": 8, "radios-down": 0 },
+          "stats-misconfigured-aps": 0,
+        },
+      },
+      "Cisco-IOS-XE-wireless-ap-global-oper:ap-global-oper-data/emltd-join-count-stat": {
+        "emltd-join-count-stat": { "joined-aps-count": 4 },
+      },
+    });
+
+    const health = await getWlcHealth(client);
+
+    expect(health).toEqual({
+      cpuFiveSecPercent: 3,
+      cpuOneMinPercent: 5,
+      cpuFiveMinPercent: 7,
+      memoryTotalBytes: 1000,
+      memoryUsedBytes: 250,
+      memoryUsedPercent: 25,
+      bootTime: "2026-01-01T00:00:00+00:00",
+      uptimeSeconds: 86400,
+      softwareVersion: "Cisco IOS Software, C9800-CL, Version 17.9.1",
+      lastRebootReason: "reload",
+      joinedApCount: 4,
+      radiosUp: 8,
+      radiosDown: 0,
+      misconfiguredApCount: 0,
+    });
   });
 });
