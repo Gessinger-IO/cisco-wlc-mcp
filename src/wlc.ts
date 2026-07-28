@@ -528,8 +528,7 @@ export async function listInterferers(client: RestconfClient): Promise<Interfere
       dutyCyclePercent: pick(entry, "duty-cycle", "duty-cycle-pct") as number | undefined,
       rssi: numericVal(pick(entry, "rssi")),
       detectedTime: pick(entry, "detected-time", "last-updated-time", "update-time") as
-        | string
-        | undefined,
+        string | undefined,
     };
   });
 }
@@ -571,8 +570,7 @@ export async function listApNeighbors(client: RestconfClient): Promise<ApNeighbo
       radioSlotId: pick(entry, "radio-slot-id", "slot-id"),
       neighbors: neighbors.map((neighbor) => {
         const neighborMac = pick(neighbor, "nbor-radio-mac", "neighbor-mac", "nbr-bssid") as
-          | string
-          | undefined;
+          string | undefined;
 
         return {
           neighborApName: neighborMac ? apNameMap.get(neighborMac) : undefined,

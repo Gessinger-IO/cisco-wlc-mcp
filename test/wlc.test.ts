@@ -507,7 +507,9 @@ describe("listApNeighbors", () => {
         apName: "AP1",
         wtpMac: "aa:bb:cc:dd:ee:ff",
         radioSlotId: 1,
-        neighbors: [{ neighborApName: "AP2", neighborMac: "11:22:33:44:55:66", rssi: -70, channel: 44 }],
+        neighbors: [
+          { neighborApName: "AP2", neighborMac: "11:22:33:44:55:66", rssi: -70, channel: 44 },
+        ],
       },
     ]);
   });
@@ -547,7 +549,9 @@ describe("getClientDetail", () => {
     };
     const client = fakeClient(responses);
     client.get = (path: string) =>
-      path in responses ? Promise.resolve(responses[path]) : Promise.reject(new Error("not supported"));
+      path in responses
+        ? Promise.resolve(responses[path])
+        : Promise.reject(new Error("not supported"));
 
     const detail = await getClientDetail(client, "1122.3344.5566");
 
