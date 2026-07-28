@@ -7,6 +7,13 @@
 * (restconf) error messages are now classified and actionable instead of raw Axios/HTTP text —
   covers connection refused/unresolved host/timeout/TLS cert errors, and HTTP 401/403/404/5xx
   (including a hint to try `restconf_get` on a parent path for 404s caused by IOS-XE version drift)
+* added `list_interferers` tool — CleanAir-detected non-Wi-Fi interference sources per AP/channel,
+  with type, severity, duty cycle and RSSI (`rrm-oper-data/spectrum-device-rf-stats`)
+* added `list_ap_neighbors` tool — RRM-observed neighbor relationships between AP radios, for
+  coverage overlap/hole planning (`rrm-oper-data/rrm-neighbor-data`)
+* added `get_client_detail` tool — single-client deep dive by MAC address (any notation): the same
+  RF diagnostics as `list_wireless_clients`, plus best-effort VLAN/QoS/ACL policy info (`client-oper-data/policy-data`)
+* added `list_ap_tags` tool — Policy/Site/RF tag assignment per AP (`access-point-oper-data/ap-tag-config-oper-data`)
 
 ## 0.3.0 (2026-07-15)
 * (list_wireless_clients) added RF diagnostics: `channel`, `band`, `securityMode` (from `dot11-oper-data`)

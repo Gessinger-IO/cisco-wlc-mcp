@@ -8,6 +8,10 @@ import {
   listPolicyProfiles,
   listApRadios,
   getWlcHealth,
+  listInterferers,
+  listApNeighbors,
+  getClientDetail,
+  listApTags,
 } from "../src/wlc.js";
 
 function fakeClient(responses: Record<string, unknown>): RestconfClient {
@@ -426,5 +430,176 @@ describe("getWlcHealth", () => {
       radiosDown: 0,
       misconfiguredApCount: 0,
     });
+  });
+});
+
+describe("listInterferers", () => {
+  it("resolves the AP name and maps interferer type/rssi", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/spectrum-device-rf-stats": {
+        "spectrum-device-rf-stats": [
+          {
+            "wtp-mac": "aa:bb:cc:dd:ee:ff",
+            type: "interferer-microwave-oven",
+            channel: 6,
+            severity: 3,
+            "duty-cycle": 40,
+            rssi: { val: -60, num: -60, den: 0 },
+            "detected-time": "2026-01-01T00:00:00+00:00",
+          },
+        ],
+      },
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data": {
+        "capwap-data": [{ "wtp-mac": "aa:bb:cc:dd:ee:ff", name: "AP1" }],
+      },
+    });
+
+    expect(await listInterferers(client)).toEqual([
+      {
+        apName: "AP1",
+        wtpMac: "aa:bb:cc:dd:ee:ff",
+        deviceType: "Microwave Oven",
+        channel: 6,
+        severity: 3,
+        dutyCyclePercent: 40,
+        rssi: -60,
+        detectedTime: "2026-01-01T00:00:00+00:00",
+      },
+    ]);
+  });
+
+  it("passes unknown interferer types through unchanged", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/spectrum-device-rf-stats": {
+        "spectrum-device-rf-stats": [{ type: "interferer-some-future-type" }],
+      },
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data": {
+        "capwap-data": [],
+      },
+    });
+
+    expect((await listInterferers(client))[0].deviceType).toBe("interferer-some-future-type");
+  });
+});
+
+describe("listApNeighbors", () => {
+  it("resolves reporting and neighbor AP names", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/rrm-neighbor-data": {
+        "rrm-neighbor-data": [
+          {
+            "wtp-mac": "aa:bb:cc:dd:ee:ff",
+            "radio-slot-id": 1,
+            "nbor-radio-info": [{ "nbor-radio-mac": "11:22:33:44:55:66", rssi: -70, channel: 44 }],
+          },
+        ],
+      },
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data": {
+        "capwap-data": [
+          { "wtp-mac": "aa:bb:cc:dd:ee:ff", name: "AP1" },
+          { "wtp-mac": "11:22:33:44:55:66", name: "AP2" },
+        ],
+      },
+    });
+
+    expect(await listApNeighbors(client)).toEqual([
+      {
+        apName: "AP1",
+        wtpMac: "aa:bb:cc:dd:ee:ff",
+        radioSlotId: 1,
+        neighbors: [{ neighborApName: "AP2", neighborMac: "11:22:33:44:55:66", rssi: -70, channel: 44 }],
+      },
+    ]);
+  });
+});
+
+describe("getClientDetail", () => {
+  const clientResponses = {
+    "Cisco-IOS-XE-wireless-client-oper:client-oper-data/common-oper-data": {
+      "common-oper-data": [{ "client-mac": "11:22:33:44:55:66", "ap-name": "AP1" }],
+    },
+  };
+
+  it("returns undefined when no client matches the MAC", async () => {
+    const client = fakeClient(clientResponses);
+    client.get = (path: string) =>
+      path in clientResponses
+        ? Promise.resolve((clientResponses as Record<string, unknown>)[path])
+        : Promise.reject(new Error("not supported"));
+
+    expect(await getClientDetail(client, "aa:aa:aa:aa:aa:aa")).toBeUndefined();
+  });
+
+  it("matches regardless of MAC notation and attaches policy info", async () => {
+    const responses: Record<string, unknown> = {
+      ...clientResponses,
+      "Cisco-IOS-XE-wireless-client-oper:client-oper-data/policy-data": {
+        "policy-data": [
+          {
+            "client-mac": "11:22:33:44:55:66",
+            "vlan-id": 20,
+            "ingress-qos-policy-name": "platinum-in",
+            "egress-qos-policy-name": "platinum-out",
+            "acl-name": "guest-acl",
+          },
+        ],
+      },
+    };
+    const client = fakeClient(responses);
+    client.get = (path: string) =>
+      path in responses ? Promise.resolve(responses[path]) : Promise.reject(new Error("not supported"));
+
+    const detail = await getClientDetail(client, "1122.3344.5566");
+
+    expect(detail?.clientMac).toBe("11:22:33:44:55:66");
+    expect(detail?.apName).toBe("AP1");
+    expect(detail?.policy).toEqual({
+      vlanId: 20,
+      qosPolicyIn: "platinum-in",
+      qosPolicyOut: "platinum-out",
+      aclName: "guest-acl",
+    });
+  });
+
+  it("leaves policy undefined when the policy-data path is unavailable", async () => {
+    const client = fakeClient(clientResponses);
+    client.get = (path: string) =>
+      path in clientResponses
+        ? Promise.resolve((clientResponses as Record<string, unknown>)[path])
+        : Promise.reject(new Error("not supported"));
+
+    const detail = await getClientDetail(client, "11:22:33:44:55:66");
+
+    expect(detail?.policy).toBeUndefined();
+  });
+});
+
+describe("listApTags", () => {
+  it("extracts policy/site/rf tag assignment per AP", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/ap-tag-config-oper-data": {
+        "ap-tag-config-oper-data": [
+          {
+            "ap-name": "AP1",
+            "wtp-mac-addr": "aa:bb:cc:dd:ee:ff",
+            "policy-tag-name": "default-policy-tag",
+            "site-tag-name": "Keller-Site",
+            "rf-tag-name": "default-rf-tag",
+            "tag-source": "filter",
+          },
+        ],
+      },
+    });
+
+    expect(await listApTags(client)).toEqual([
+      {
+        apName: "AP1",
+        wtpMac: "aa:bb:cc:dd:ee:ff",
+        policyTagName: "default-policy-tag",
+        siteTagName: "Keller-Site",
+        rfTagName: "default-rf-tag",
+        tagSource: "filter",
+      },
+    ]);
   });
 });

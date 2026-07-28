@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { RestconfClient, loadConfigFromEnv } from "./restconf.js";
-import { listAccessPoints, listWirelessClients, listWlans, listRogueAps, listPolicyProfiles, listApRadios, getWlcHealth, } from "./wlc.js";
+import { listAccessPoints, listWirelessClients, listWlans, listRogueAps, listPolicyProfiles, listApRadios, getWlcHealth, listInterferers, listApNeighbors, getClientDetail, listApTags, } from "./wlc.js";
 const config = loadConfigFromEnv();
 const restconf = new RestconfClient(config);
 const server = new McpServer({
@@ -73,6 +73,55 @@ server.registerTool("get_wlc_health", {
 }, async () => {
     const health = await getWlcHealth(restconf);
     return { content: [{ type: "text", text: JSON.stringify(health, null, 2) }] };
+});
+server.registerTool("list_interferers", {
+    title: "List CleanAir Interferers",
+    description: "Lists CleanAir-detected non-Wi-Fi interference sources (microwave ovens, Bluetooth, video " +
+        "cameras, jammers, etc.) per AP/channel, with severity, duty cycle and RSSI. Complements " +
+        "list_ap_radios (channel utilization) and list_rogue_aps (Wi-Fi interferers) for RF troubleshooting.",
+    inputSchema: {},
+}, async () => {
+    const interferers = await listInterferers(restconf);
+    return { content: [{ type: "text", text: JSON.stringify(interferers, null, 2) }] };
+});
+server.registerTool("list_ap_neighbors", {
+    title: "List AP RF Neighbors",
+    description: "Lists RRM-observed neighbor relationships between AP radios (which APs hear each other and " +
+        "how strongly). Useful for spotting coverage overlap or coverage holes when planning channel/power.",
+    inputSchema: {},
+}, async () => {
+    const neighbors = await listApNeighbors(restconf);
+    return { content: [{ type: "text", text: JSON.stringify(neighbors, null, 2) }] };
+});
+server.registerTool("get_client_detail", {
+    title: "Get Wireless Client Detail",
+    description: "Deep-dive on a single wireless client by MAC address: the same RF diagnostics as " +
+        "list_wireless_clients, plus (best-effort) VLAN/QoS/ACL policy info. Returns nothing if no " +
+        "currently-associated client matches the given MAC.",
+    inputSchema: {
+        macAddress: z
+            .string()
+            .describe("Client MAC address in any common notation (aa:bb:cc:dd:ee:ff, aa-bb-cc-dd-ee-ff, or aabb.ccdd.eeff)"),
+    },
+}, async ({ macAddress }) => {
+    const detail = await getClientDetail(restconf, macAddress);
+    if (!detail) {
+        return {
+            content: [
+                { type: "text", text: `No currently-associated client found for MAC ${macAddress}.` },
+            ],
+        };
+    }
+    return { content: [{ type: "text", text: JSON.stringify(detail, null, 2) }] };
+});
+server.registerTool("list_ap_tags", {
+    title: "List AP Tags",
+    description: "Lists the Policy/Site/RF tag assignment for each AP. Useful for finding config mismatches, " +
+        "e.g. an AP stuck on the default-policy-tag when it should carry a site-specific tag.",
+    inputSchema: {},
+}, async () => {
+    const tags = await listApTags(restconf);
+    return { content: [{ type: "text", text: JSON.stringify(tags, null, 2) }] };
 });
 server.registerTool("restconf_get", {
     title: "Raw RESTCONF GET",
