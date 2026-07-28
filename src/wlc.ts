@@ -537,6 +537,7 @@ export interface ApNeighbor {
   neighborApName?: string;
   neighborMac?: string;
   rssi?: number;
+  snr?: number;
   channel?: number;
 }
 
@@ -550,33 +551,38 @@ export interface ApNeighborSummary {
 /**
  * Lists RRM-observed neighbor relationships between AP radios (which APs hear each other, and
  * how strongly). Useful for spotting coverage overlap/holes when planning channel and power.
+ *
+ * Each entry's neighbor list is double-wrapped in the YANG model: the list itself is
+ * `neighbor-radio-info.neighbor-radio-list`, and each item's fields are nested one level further
+ * under its own `neighbor-radio-info` key.
  */
 export async function listApNeighbors(client: RestconfClient): Promise<ApNeighborSummary[]> {
   const [data, apNameMap] = await Promise.all([
-    client.get("Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/rrm-neighbor-data"),
+    client.get("Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/ap-auto-rf-dot11-data"),
     buildApNameMap(client),
   ]);
   const entries = asArray(firstContainerValue(data));
 
   return entries.map((entry) => {
     const wtpMac = pick(entry, "wtp-mac", "mac-address") as string | undefined;
-    const neighbors = asArray(
-      pick(entry, "nbor-radio-info", "neighbor-radio-info", "neighbor-list")
-    );
+    const neighborRadioInfo = (entry["neighbor-radio-info"] as Record<string, unknown>) ?? {};
+    const neighbors = asArray(pick(neighborRadioInfo, "neighbor-radio-list"));
 
     return {
       apName: wtpMac ? apNameMap.get(wtpMac) : undefined,
       wtpMac,
       radioSlotId: pick(entry, "radio-slot-id", "slot-id"),
       neighbors: neighbors.map((neighbor) => {
-        const neighborMac = pick(neighbor, "nbor-radio-mac", "neighbor-mac", "nbr-bssid") as
+        const info = (neighbor["neighbor-radio-info"] as Record<string, unknown>) ?? neighbor;
+        const neighborMac = pick(info, "neighbor-radio-mac", "nbor-radio-mac", "nbr-bssid") as
           string | undefined;
 
         return {
           neighborApName: neighborMac ? apNameMap.get(neighborMac) : undefined,
           neighborMac,
-          rssi: numericVal(pick(neighbor, "rssi")),
-          channel: pick(neighbor, "channel", "chan") as number | undefined,
+          rssi: numericVal(pick(info, "rssi")),
+          snr: numericVal(pick(info, "snr")),
+          channel: pick(info, "channel", "chan") as number | undefined,
         };
       }),
     };
@@ -655,21 +661,36 @@ export interface ApTagSummary {
 /**
  * Lists the Policy/Site/RF tag assignment for each AP. Useful for finding config mismatches
  * (e.g. an AP stuck on the default-policy-tag when it should carry a site-specific tag).
+ *
+ * There's no dedicated tag-config container in the oper YANG model — tag assignment is nested
+ * inside each AP's `capwap-data` entry under `tag-info.resolved-tag-info` (the source-of-truth
+ * regardless of whether the tag was assigned statically, via a filter, or by default).
  */
 export async function listApTags(client: RestconfClient): Promise<ApTagSummary[]> {
   const data = await client.get(
-    "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/ap-tag-config-oper-data"
+    "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data"
   );
   const entries = asArray(firstContainerValue(data));
 
-  return entries.map((entry) => ({
-    apName: pick(entry, "ap-name", "name") as string | undefined,
-    wtpMac: pick(entry, "wtp-mac-addr", "wtp-mac") as string | undefined,
-    policyTagName: pick(entry, "policy-tag-name") as string | undefined,
-    siteTagName: pick(entry, "site-tag-name") as string | undefined,
-    rfTagName: pick(entry, "rf-tag-name") as string | undefined,
-    tagSource: pick(entry, "tag-source") as string | undefined,
-  }));
+  return entries.map((entry) => {
+    const tagInfo = (entry["tag-info"] as Record<string, unknown>) ?? {};
+    const resolved = (tagInfo["resolved-tag-info"] as Record<string, unknown>) ?? {};
+    const policyTagInfo = (tagInfo["policy-tag-info"] as Record<string, unknown>) ?? {};
+    const siteTag = (tagInfo["site-tag"] as Record<string, unknown>) ?? {};
+    const rfTag = (tagInfo["rf-tag"] as Record<string, unknown>) ?? {};
+
+    return {
+      apName: pick(entry, "name", "ap-name") as string | undefined,
+      wtpMac: pick(entry, "wtp-mac") as string | undefined,
+      policyTagName: (pick(resolved, "resolved-policy-tag") ??
+        pick(policyTagInfo, "policy-tag-name")) as string | undefined,
+      siteTagName: (pick(resolved, "resolved-site-tag") ?? pick(siteTag, "site-tag-name")) as
+        string | undefined,
+      rfTagName: (pick(resolved, "resolved-rf-tag") ?? pick(rfTag, "rf-tag-name")) as
+        string | undefined,
+      tagSource: pick(tagInfo, "tag-source") as string | undefined,
+    };
+  });
 }
 
 export interface WlcHealthSummary {
