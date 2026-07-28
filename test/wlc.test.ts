@@ -483,15 +483,30 @@ describe("listInterferers", () => {
 });
 
 describe("listApNeighbors", () => {
-  it("resolves reporting and neighbor AP names", async () => {
+  it("resolves reporting and neighbor AP names from the double-wrapped neighbor-radio-info shape", async () => {
+    // Real shape observed on IOS-XE 26.1.1: the list is neighbor-radio-info.neighbor-radio-list,
+    // and each item's fields are nested one level further under its own neighbor-radio-info key.
     const client = fakeClient({
-      "Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/rrm-neighbor-data": {
-        "rrm-neighbor-data": [
+      "Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/ap-auto-rf-dot11-data": {
+        "ap-auto-rf-dot11-data": [
           {
             "wtp-mac": "aa:bb:cc:dd:ee:ff",
             "radio-slot-id": 1,
-            "nbor-radio-info": [{ "nbor-radio-mac": "11:22:33:44:55:66", rssi: -70, channel: 44 }],
+            "neighbor-radio-info": {
+              "neighbor-radio-list": [
+                {
+                  "neighbor-radio-info": {
+                    "neighbor-radio-mac": "11:22:33:44:55:66",
+                    rssi: -70,
+                    snr: 30,
+                    channel: 44,
+                  },
+                },
+              ],
+            },
           },
+          // Radios with no observed neighbors have no neighbor-radio-info key at all.
+          { "wtp-mac": "aa:bb:cc:dd:ee:ff", "radio-slot-id": 2 },
         ],
       },
       "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data": {
@@ -508,8 +523,20 @@ describe("listApNeighbors", () => {
         wtpMac: "aa:bb:cc:dd:ee:ff",
         radioSlotId: 1,
         neighbors: [
-          { neighborApName: "AP2", neighborMac: "11:22:33:44:55:66", rssi: -70, channel: 44 },
+          {
+            neighborApName: "AP2",
+            neighborMac: "11:22:33:44:55:66",
+            rssi: -70,
+            snr: 30,
+            channel: 44,
+          },
         ],
+      },
+      {
+        apName: "AP1",
+        wtpMac: "aa:bb:cc:dd:ee:ff",
+        radioSlotId: 2,
+        neighbors: [],
       },
     ]);
   });
@@ -579,17 +606,26 @@ describe("getClientDetail", () => {
 });
 
 describe("listApTags", () => {
-  it("extracts policy/site/rf tag assignment per AP", async () => {
+  it("extracts resolved policy/site/rf tag assignment from capwap-data's tag-info", async () => {
+    // Real shape observed on IOS-XE 26.1.1: there's no dedicated tag-config container — tag
+    // assignment lives inside each AP's capwap-data entry, under tag-info.resolved-tag-info.
     const client = fakeClient({
-      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/ap-tag-config-oper-data": {
-        "ap-tag-config-oper-data": [
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data": {
+        "capwap-data": [
           {
-            "ap-name": "AP1",
-            "wtp-mac-addr": "aa:bb:cc:dd:ee:ff",
-            "policy-tag-name": "default-policy-tag",
-            "site-tag-name": "Keller-Site",
-            "rf-tag-name": "default-rf-tag",
-            "tag-source": "filter",
+            "wtp-mac": "aa:bb:cc:dd:ee:ff",
+            name: "AP1",
+            "tag-info": {
+              "tag-source": "tag-source-static",
+              "resolved-tag-info": {
+                "resolved-policy-tag": "Tag_Keller",
+                "resolved-site-tag": "default-site-tag",
+                "resolved-rf-tag": "default-rf-tag",
+              },
+              "policy-tag-info": { "policy-tag-name": "Tag_Keller" },
+              "site-tag": { "site-tag-name": "default-site-tag" },
+              "rf-tag": { "rf-tag-name": "default-rf-tag" },
+            },
           },
         ],
       },
@@ -599,11 +635,36 @@ describe("listApTags", () => {
       {
         apName: "AP1",
         wtpMac: "aa:bb:cc:dd:ee:ff",
-        policyTagName: "default-policy-tag",
-        siteTagName: "Keller-Site",
+        policyTagName: "Tag_Keller",
+        siteTagName: "default-site-tag",
         rfTagName: "default-rf-tag",
-        tagSource: "filter",
+        tagSource: "tag-source-static",
       },
     ]);
+  });
+
+  it("falls back to the non-resolved tag containers when resolved-tag-info is absent", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data": {
+        "capwap-data": [
+          {
+            "wtp-mac": "aa:bb:cc:dd:ee:ff",
+            name: "AP1",
+            "tag-info": {
+              "tag-source": "filter",
+              "policy-tag-info": { "policy-tag-name": "Tag_Keller" },
+              "site-tag": { "site-tag-name": "Keller-Site" },
+              "rf-tag": { "rf-tag-name": "default-rf-tag" },
+            },
+          },
+        ],
+      },
+    });
+
+    const tags = await listApTags(client);
+
+    expect(tags[0].policyTagName).toBe("Tag_Keller");
+    expect(tags[0].siteTagName).toBe("Keller-Site");
+    expect(tags[0].rfTagName).toBe("default-rf-tag");
   });
 });

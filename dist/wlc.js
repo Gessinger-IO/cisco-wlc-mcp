@@ -389,27 +389,34 @@ export async function listInterferers(client) {
 /**
  * Lists RRM-observed neighbor relationships between AP radios (which APs hear each other, and
  * how strongly). Useful for spotting coverage overlap/holes when planning channel and power.
+ *
+ * Each entry's neighbor list is double-wrapped in the YANG model: the list itself is
+ * `neighbor-radio-info.neighbor-radio-list`, and each item's fields are nested one level further
+ * under its own `neighbor-radio-info` key.
  */
 export async function listApNeighbors(client) {
     const [data, apNameMap] = await Promise.all([
-        client.get("Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/rrm-neighbor-data"),
+        client.get("Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/ap-auto-rf-dot11-data"),
         buildApNameMap(client),
     ]);
     const entries = asArray(firstContainerValue(data));
     return entries.map((entry) => {
         const wtpMac = pick(entry, "wtp-mac", "mac-address");
-        const neighbors = asArray(pick(entry, "nbor-radio-info", "neighbor-radio-info", "neighbor-list"));
+        const neighborRadioInfo = entry["neighbor-radio-info"] ?? {};
+        const neighbors = asArray(pick(neighborRadioInfo, "neighbor-radio-list"));
         return {
             apName: wtpMac ? apNameMap.get(wtpMac) : undefined,
             wtpMac,
             radioSlotId: pick(entry, "radio-slot-id", "slot-id"),
             neighbors: neighbors.map((neighbor) => {
-                const neighborMac = pick(neighbor, "nbor-radio-mac", "neighbor-mac", "nbr-bssid");
+                const info = neighbor["neighbor-radio-info"] ?? neighbor;
+                const neighborMac = pick(info, "neighbor-radio-mac", "nbor-radio-mac", "nbr-bssid");
                 return {
                     neighborApName: neighborMac ? apNameMap.get(neighborMac) : undefined,
                     neighborMac,
-                    rssi: numericVal(pick(neighbor, "rssi")),
-                    channel: pick(neighbor, "channel", "chan"),
+                    rssi: numericVal(pick(info, "rssi")),
+                    snr: numericVal(pick(info, "snr")),
+                    channel: pick(info, "channel", "chan"),
                 };
             }),
         };
@@ -459,18 +466,30 @@ export async function getClientDetail(client, macAddress) {
 /**
  * Lists the Policy/Site/RF tag assignment for each AP. Useful for finding config mismatches
  * (e.g. an AP stuck on the default-policy-tag when it should carry a site-specific tag).
+ *
+ * There's no dedicated tag-config container in the oper YANG model — tag assignment is nested
+ * inside each AP's `capwap-data` entry under `tag-info.resolved-tag-info` (the source-of-truth
+ * regardless of whether the tag was assigned statically, via a filter, or by default).
  */
 export async function listApTags(client) {
-    const data = await client.get("Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/ap-tag-config-oper-data");
+    const data = await client.get("Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data");
     const entries = asArray(firstContainerValue(data));
-    return entries.map((entry) => ({
-        apName: pick(entry, "ap-name", "name"),
-        wtpMac: pick(entry, "wtp-mac-addr", "wtp-mac"),
-        policyTagName: pick(entry, "policy-tag-name"),
-        siteTagName: pick(entry, "site-tag-name"),
-        rfTagName: pick(entry, "rf-tag-name"),
-        tagSource: pick(entry, "tag-source"),
-    }));
+    return entries.map((entry) => {
+        const tagInfo = entry["tag-info"] ?? {};
+        const resolved = tagInfo["resolved-tag-info"] ?? {};
+        const policyTagInfo = tagInfo["policy-tag-info"] ?? {};
+        const siteTag = tagInfo["site-tag"] ?? {};
+        const rfTag = tagInfo["rf-tag"] ?? {};
+        return {
+            apName: pick(entry, "name", "ap-name"),
+            wtpMac: pick(entry, "wtp-mac"),
+            policyTagName: (pick(resolved, "resolved-policy-tag") ??
+                pick(policyTagInfo, "policy-tag-name")),
+            siteTagName: (pick(resolved, "resolved-site-tag") ?? pick(siteTag, "site-tag-name")),
+            rfTagName: (pick(resolved, "resolved-rf-tag") ?? pick(rfTag, "rf-tag-name")),
+            tagSource: pick(tagInfo, "tag-source"),
+        };
+    });
 }
 export async function getWlcHealth(client) {
     const [cpuData, memoryData, hardwareData, radioStatsData, joinCountData] = await Promise.all([

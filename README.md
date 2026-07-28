@@ -84,8 +84,17 @@ Falls ein Tool leere/unerwartete Werte liefert, zunächst mit `restconf_get` die
 jeweiligen Pfads (z.B. `Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data`) prüfen
 und die Extraktion in `src/wlc.ts` anpassen.
 
-`list_interferers`, `list_ap_neighbors` und `list_ap_tags` wurden ohne Zugriff auf einen echten
-WLC entwickelt — die verwendeten YANG-Pfade/Feldnamen (`spectrum-device-rf-stats`,
-`rrm-neighbor-data`, `ap-tag-config-oper-data`) basieren auf der dokumentierten Cisco-9800-API,
-sind aber nicht gegen echte Hardware verifiziert. Vor produktivem Einsatz mit `restconf_get`
-gegenprüfen.
+`list_ap_neighbors` und `list_ap_tags` wurden gegen einen echten C9800-CL (IOS-XE 26.1.1) verifiziert
+und dabei korrigiert — die ursprünglich geratenen Pfade/Feldnamen existierten so nicht. Die tatsächlichen
+YANG-Fundstellen: `rrm-oper-data/ap-auto-rf-dot11-data` (doppelt verschachtelt: die Nachbarliste steckt
+unter `neighbor-radio-info.neighbor-radio-list`, jedes Element nochmal unter einem eigenen
+`neighbor-radio-info`) bzw. `access-point-oper-data/capwap-data`'s `tag-info.resolved-tag-info`
+(kein eigener Tag-Config-Container).
+
+`list_interferers` bleibt unverifiziert: Der geratene Pfad (`spectrum-device-rf-stats`) existiert
+nicht, und auch nach vollständigem Durchsuchen von `rrm-oper-data` auf einem echten WLC fand sich
+dort kein Interferer-Geräte-Report (nur `ap-dot11-spectrum-data` mit CleanAir-Konfig/Status, keine
+Device-Liste) — vermutlich lebt der Report in einem anderen YANG-Modul. Zusätzlich war auf dem
+Test-WLC Spectrum Intelligence/CleanAir deaktiviert, was eine vollständige Verifikation ohnehin
+verhindert hätte. Bis das geklärt ist, liefert das Tool bei jedem Aufruf einen Fehler
+(HTTP 404 über `restconf_get`-Hinweis).

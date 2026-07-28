@@ -3,6 +3,17 @@
     Placeholder for the next version (at the beginning of the line):
     ## **WORK IN PROGRESS**
 -->
+## **WORK IN PROGRESS**
+* (list_ap_neighbors) fixed against a real WLC (C9800-CL, IOS-XE 26.1.1) — the actual path is
+  `rrm-oper-data/ap-auto-rf-dot11-data`, not `rrm-neighbor-data`, and the neighbor list is nested
+  under `neighbor-radio-info.neighbor-radio-list` with each item's fields one level further under
+  its own `neighbor-radio-info`; also added `snr`
+* (list_ap_tags) fixed against the same device — there's no `ap-tag-config-oper-data` container;
+  tag assignment is nested inside each AP's `capwap-data` entry under `tag-info.resolved-tag-info`
+* (list_interferers) confirmed broken — `spectrum-device-rf-stats` doesn't exist, and no interferer
+  device report could be found anywhere under `rrm-oper-data` on real hardware; still unverified,
+  the tool currently always errors
+
 ## 0.4.0 (2026-07-28)
 * (restconf) error messages are now classified and actionable instead of raw Axios/HTTP text —
   covers connection refused/unresolved host/timeout/TLS cert errors, and HTTP 401/403/404/5xx
