@@ -71,6 +71,10 @@ immer den zuletzt auf npm veröffentlichten Stand ziehen, nicht den lokalen:
 - `list_ap_radios` — Radio-Diagnose pro AP (Band, Kanal, Kanalbreite, TX-Power-Level, Admin/Oper-State, Channel-Utilization, Client-Count, Noise-Floor)
 - `get_wlc_health` — Controller-Health (CPU, Memory, Uptime, Software-Version, Reboot-Grund, verbundene APs, Radio-Status, fehlkonfigurierte APs)
 - `list_rogue_aps` — erkannte Rogue APs (MAC, SSID, Klassifizierung, Status)
+- `list_interferers` — CleanAir-erkannte Nicht-WLAN-Störquellen (Mikrowelle, Bluetooth, Kamera, Jammer, ...) pro AP/Kanal
+- `list_ap_neighbors` — RRM-Nachbarschaftsbeziehungen zwischen AP-Radios (wer hört wen wie stark) für Coverage-Planung
+- `get_client_detail` — Detail-Diagnose für einen einzelnen Client per MAC-Adresse (RF-Diagnostik + best-effort VLAN/QoS/ACL)
+- `list_ap_tags` — Policy-/Site-/RF-Tag-Zuordnung pro AP
 - `restconf_get` — Fallback für rohe RESTCONF-GET-Abfragen auf beliebige YANG-Pfade
 
 ## Hinweis
@@ -79,3 +83,9 @@ Die Feldnamen in den YANG-Modellen können sich je nach IOS-XE-Version leicht un
 Falls ein Tool leere/unerwartete Werte liefert, zunächst mit `restconf_get` die Rohdaten des
 jeweiligen Pfads (z.B. `Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data`) prüfen
 und die Extraktion in `src/wlc.ts` anpassen.
+
+`list_interferers`, `list_ap_neighbors` und `list_ap_tags` wurden ohne Zugriff auf einen echten
+WLC entwickelt — die verwendeten YANG-Pfade/Feldnamen (`spectrum-device-rf-stats`,
+`rrm-neighbor-data`, `ap-tag-config-oper-data`) basieren auf der dokumentierten Cisco-9800-API,
+sind aber nicht gegen echte Hardware verifiziert. Vor produktivem Einsatz mit `restconf_get`
+gegenprüfen.

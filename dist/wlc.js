@@ -342,6 +342,136 @@ export async function listApRadios(client) {
         };
     });
 }
+/** Maps the CleanAir interferer-type enum to a human-readable label. Unknown values pass through as-is. */
+const INTERFERER_TYPE_LABELS = {
+    "interferer-microwave-oven": "Microwave Oven",
+    "interferer-bt-link": "Bluetooth Link",
+    "interferer-bt-discovery": "Bluetooth Discovery",
+    "interferer-video-camera": "Video Camera",
+    "interferer-802-11-fh": "802.11 FH",
+    "interferer-802-11-non-std-channel": "802.11 Non-Standard Channel",
+    "interferer-jammer": "Jammer",
+    "interferer-continuous-transmitter": "Continuous Transmitter",
+    "interferer-wimax-fixed": "WiMAX Fixed",
+    "interferer-wimax-mobile": "WiMAX Mobile",
+    "interferer-xbox": "Xbox",
+};
+function interfererTypeLabel(type) {
+    if (typeof type !== "string")
+        return undefined;
+    return INTERFERER_TYPE_LABELS[type] ?? type;
+}
+/**
+ * Lists CleanAir-detected interference sources (non-Wi-Fi devices such as microwave ovens,
+ * Bluetooth, video cameras) per AP/channel. Complements list_ap_radios (channel utilization)
+ * and list_rogue_aps (Wi-Fi interferers) for RF troubleshooting.
+ */
+export async function listInterferers(client) {
+    const [data, apNameMap] = await Promise.all([
+        client.get("Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/spectrum-device-rf-stats"),
+        buildApNameMap(client),
+    ]);
+    const entries = asArray(firstContainerValue(data));
+    return entries.map((entry) => {
+        const wtpMac = pick(entry, "wtp-mac", "mac-address");
+        return {
+            apName: wtpMac ? apNameMap.get(wtpMac) : undefined,
+            wtpMac,
+            deviceType: interfererTypeLabel(pick(entry, "type", "interferer-type", "dev-type")),
+            channel: pick(entry, "channel", "chan-number", "cid"),
+            severity: pick(entry, "severity", "severity-index"),
+            dutyCyclePercent: pick(entry, "duty-cycle", "duty-cycle-pct"),
+            rssi: numericVal(pick(entry, "rssi")),
+            detectedTime: pick(entry, "detected-time", "last-updated-time", "update-time"),
+        };
+    });
+}
+/**
+ * Lists RRM-observed neighbor relationships between AP radios (which APs hear each other, and
+ * how strongly). Useful for spotting coverage overlap/holes when planning channel and power.
+ */
+export async function listApNeighbors(client) {
+    const [data, apNameMap] = await Promise.all([
+        client.get("Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/rrm-neighbor-data"),
+        buildApNameMap(client),
+    ]);
+    const entries = asArray(firstContainerValue(data));
+    return entries.map((entry) => {
+        const wtpMac = pick(entry, "wtp-mac", "mac-address");
+        const neighbors = asArray(pick(entry, "nbor-radio-info", "neighbor-radio-info", "neighbor-list"));
+        return {
+            apName: wtpMac ? apNameMap.get(wtpMac) : undefined,
+            wtpMac,
+            radioSlotId: pick(entry, "radio-slot-id", "slot-id"),
+            neighbors: neighbors.map((neighbor) => {
+                const neighborMac = pick(neighbor, "nbor-radio-mac", "neighbor-mac", "nbr-bssid");
+                return {
+                    neighborApName: neighborMac ? apNameMap.get(neighborMac) : undefined,
+                    neighborMac,
+                    rssi: numericVal(pick(neighbor, "rssi")),
+                    channel: pick(neighbor, "channel", "chan"),
+                };
+            }),
+        };
+    });
+}
+/** Strips separators and lowercases a MAC address so "aa:bb..", "aa-bb..", and "aabb.cc.." compare equal. */
+function normalizeMac(mac) {
+    return mac.toLowerCase().replace(/[^0-9a-f]/g, "");
+}
+/** Best-effort per-client VLAN/QoS/ACL lookup. Returns undefined if the path or client entry isn't found. */
+async function findClientPolicy(client, normalizedMac) {
+    let data;
+    try {
+        data = await client.get("Cisco-IOS-XE-wireless-client-oper:client-oper-data/policy-data");
+    }
+    catch {
+        return undefined;
+    }
+    const entries = asArray(firstContainerValue(data));
+    const entry = entries.find((candidate) => {
+        const mac = pick(candidate, "client-mac", "ms-mac-address");
+        return mac && normalizeMac(mac) === normalizedMac;
+    });
+    if (!entry)
+        return undefined;
+    return {
+        vlanId: pick(entry, "vlan-id", "vlan"),
+        qosPolicyIn: pick(entry, "ingress-qos-policy-name", "qos-policy-in"),
+        qosPolicyOut: pick(entry, "egress-qos-policy-name", "qos-policy-out"),
+        aclName: pick(entry, "acl-name", "ipv4-acl-name"),
+    };
+}
+/**
+ * Deep-dive on a single wireless client by MAC address: the same RF diagnostics as
+ * list_wireless_clients, plus (best-effort) VLAN/QoS/ACL policy info. Returns undefined if no
+ * currently-associated client matches the given MAC.
+ */
+export async function getClientDetail(client, macAddress) {
+    const normalizedMac = normalizeMac(macAddress);
+    const clients = await listWirelessClients(client);
+    const match = clients.find((c) => c.clientMac && normalizeMac(c.clientMac) === normalizedMac);
+    if (!match)
+        return undefined;
+    const policy = await findClientPolicy(client, normalizedMac);
+    return { ...match, policy };
+}
+/**
+ * Lists the Policy/Site/RF tag assignment for each AP. Useful for finding config mismatches
+ * (e.g. an AP stuck on the default-policy-tag when it should carry a site-specific tag).
+ */
+export async function listApTags(client) {
+    const data = await client.get("Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/ap-tag-config-oper-data");
+    const entries = asArray(firstContainerValue(data));
+    return entries.map((entry) => ({
+        apName: pick(entry, "ap-name", "name"),
+        wtpMac: pick(entry, "wtp-mac-addr", "wtp-mac"),
+        policyTagName: pick(entry, "policy-tag-name"),
+        siteTagName: pick(entry, "site-tag-name"),
+        rfTagName: pick(entry, "rf-tag-name"),
+        tagSource: pick(entry, "tag-source"),
+    }));
+}
 export async function getWlcHealth(client) {
     const [cpuData, memoryData, hardwareData, radioStatsData, joinCountData] = await Promise.all([
         client.get("Cisco-IOS-XE-process-cpu-oper:cpu-usage/cpu-utilization?fields=five-seconds;one-minute;five-minutes"),
