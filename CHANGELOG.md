@@ -3,7 +3,7 @@
     Placeholder for the next version (at the beginning of the line):
     ## **WORK IN PROGRESS**
 -->
-## **WORK IN PROGRESS**
+## 0.4.0 (2026-07-28)
 * (restconf) error messages are now classified and actionable instead of raw Axios/HTTP text —
   covers connection refused/unresolved host/timeout/TLS cert errors, and HTTP 401/403/404/5xx
   (including a hint to try `restconf_get` on a parent path for 404s caused by IOS-XE version drift)
