@@ -3,7 +3,7 @@
     Placeholder for the next version (at the beginning of the line):
     ## **WORK IN PROGRESS**
 -->
-## **WORK IN PROGRESS**
+## 0.4.1 (2026-07-28)
 * (list_ap_neighbors) fixed against a real WLC (C9800-CL, IOS-XE 26.1.1) — the actual path is
   `rrm-oper-data/ap-auto-rf-dot11-data`, not `rrm-neighbor-data`, and the neighbor list is nested
   under `neighbor-radio-info.neighbor-radio-list` with each item's fields one level further under
