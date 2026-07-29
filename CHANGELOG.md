@@ -3,6 +3,12 @@
     Placeholder for the next version (at the beginning of the line):
     ## **WORK IN PROGRESS**
 -->
+## **WORK IN PROGRESS**
+* (deps) pinned the transitive `@hono/node-server` (via `@modelcontextprotocol/sdk`) to `^2.0.12`
+  via an npm `overrides` entry, fixing a path-traversal vulnerability in `serve-static` on Windows
+  (GHSA-frvp-7c67-39w9) — the SDK's own dependency range already allows 2.x, npm just hadn't
+  resolved to it
+
 ## 0.4.1 (2026-07-28)
 * (list_ap_neighbors) fixed against a real WLC (C9800-CL, IOS-XE 26.1.1) — the actual path is
   `rrm-oper-data/ap-auto-rf-dot11-data`, not `rrm-neighbor-data`, and the neighbor list is nested
