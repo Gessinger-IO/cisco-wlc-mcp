@@ -8,6 +8,12 @@
   via an npm `overrides` entry, fixing a path-traversal vulnerability in `serve-static` on Windows
   (GHSA-frvp-7c67-39w9) — the SDK's own dependency range already allows 2.x, npm just hadn't
   resolved to it
+* (tests) added coverage tooling (`@vitest/coverage-v8`, `npm run test:coverage`, now run in CI)
+  and raised coverage from ~80%/72% (statements/branches) to ~96%/89%, incl. a new test suite for
+  the actual MCP tool wiring in `server.ts` (extracted from `index.ts` so it's testable via the
+  SDK's in-memory transport) — previously completely untested
+* (get_wlc_health) fixed a crash on WLCs where `memory-statistics` returns an unexpected/empty
+  shape — found by the new test suite, not by hand
 
 ## 0.4.1 (2026-07-28)
 * (list_ap_neighbors) fixed against a real WLC (C9800-CL, IOS-XE 26.1.1) — the actual path is
