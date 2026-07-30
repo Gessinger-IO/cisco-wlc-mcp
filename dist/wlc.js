@@ -500,7 +500,7 @@ export async function getWlcHealth(client) {
         client.get("Cisco-IOS-XE-wireless-ap-global-oper:ap-global-oper-data/emltd-join-count-stat"),
     ]);
     const cpu = firstContainerValue(cpuData) ?? {};
-    const memoryStats = asArray(pick(firstContainerValue(memoryData), "memory-statistic"));
+    const memoryStats = asArray(pick(firstContainerValue(memoryData) ?? {}, "memory-statistic"));
     const processorMemory = memoryStats.find((entry) => pick(entry, "name") === "Processor") ?? {};
     const memoryTotal = Number(pick(processorMemory, "total-memory"));
     const memoryUsed = Number(pick(processorMemory, "used-memory"));

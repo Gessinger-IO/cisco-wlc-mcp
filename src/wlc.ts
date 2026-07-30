@@ -724,7 +724,7 @@ export async function getWlcHealth(client: RestconfClient): Promise<WlcHealthSum
   const cpu = (firstContainerValue(cpuData) as Record<string, unknown>) ?? {};
 
   const memoryStats = asArray(
-    pick(firstContainerValue(memoryData) as Record<string, unknown>, "memory-statistic")
+    pick((firstContainerValue(memoryData) as Record<string, unknown>) ?? {}, "memory-statistic")
   );
   const processorMemory = memoryStats.find((entry) => pick(entry, "name") === "Processor") ?? {};
   const memoryTotal = Number(pick(processorMemory, "total-memory"));

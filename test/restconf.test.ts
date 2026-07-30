@@ -196,4 +196,129 @@ describe("RestconfClient", () => {
       );
     });
   });
+
+  it("returns the parsed response body on success", async () => {
+    await withTestServer(200, { "some-container": { hello: "world" } }, async (port) => {
+      const client = new RestconfClient({
+        host: "127.0.0.1",
+        port,
+        username: "u",
+        password: "p",
+        insecureTls: true,
+      });
+
+      await expect(client.get("some/path")).resolves.toEqual({
+        "some-container": { hello: "world" },
+      });
+    });
+  });
+
+  it("gives an actionable hint for HTTP 400 responses", async () => {
+    await withTestServer(400, { error: "bad request" }, async (port) => {
+      const client = new RestconfClient({
+        host: "127.0.0.1",
+        port,
+        username: "u",
+        password: "p",
+        insecureTls: true,
+      });
+
+      await expect(client.get("some/path")).rejects.toThrow(/HTTP 400.*malformed request/s);
+    });
+  });
+
+  it("falls back to a generic message for unmapped HTTP status codes", async () => {
+    await withTestServer(418, { error: "I'm a teapot" }, async (port) => {
+      const client = new RestconfClient({
+        host: "127.0.0.1",
+        port,
+        username: "u",
+        password: "p",
+        insecureTls: true,
+      });
+
+      await expect(client.get("some/path")).rejects.toThrow(
+        /HTTP 418.*unexpected response from the WLC/s
+      );
+    });
+  });
+
+  it("omits the Response suffix when the body is empty", async () => {
+    await withTestServer(500, "", async (port) => {
+      const client = new RestconfClient({
+        host: "127.0.0.1",
+        port,
+        username: "u",
+        password: "p",
+        insecureTls: true,
+      });
+
+      let message = "";
+      try {
+        await client.get("some/path");
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).not.toMatch(/Response:/);
+    });
+  });
+
+  it("includes a string (non-JSON) response body verbatim", async () => {
+    await withTestServer(500, "<html>gateway error</html>", async (port) => {
+      const client = new RestconfClient({
+        host: "127.0.0.1",
+        port,
+        username: "u",
+        password: "p",
+        insecureTls: true,
+      });
+
+      await expect(client.get("some/path")).rejects.toThrow(/<html>gateway error<\/html>/);
+    });
+  });
+
+  // The following network-level branches (timeout, host-unreachable, and the generic fallback for
+  // an unrecognized errno) are impractical to trigger deterministically and quickly through a real
+  // socket in a test suite, so they're exercised directly against the private classifier instead.
+  describe("network error classification", () => {
+    function describeNetworkError(code: string | undefined, message: string): string {
+      const client = new RestconfClient({
+        host: "wlc.example.com",
+        port: 443,
+        username: "u",
+        password: "p",
+        insecureTls: true,
+      });
+      return (
+        client as unknown as { describeNetworkError: (e: unknown) => string }
+      ).describeNetworkError({ code, message });
+    }
+
+    it("flags a timed-out connection", () => {
+      expect(describeNetworkError("ECONNABORTED", "timeout of 15000ms exceeded")).toMatch(
+        /timed out after 15000ms connecting to wlc\.example\.com:443/
+      );
+    });
+
+    it("flags an unreachable host/network", () => {
+      expect(describeNetworkError("EHOSTUNREACH", "connect EHOSTUNREACH")).toMatch(
+        /host wlc\.example\.com:443 unreachable — check routing\/firewall/
+      );
+      expect(describeNetworkError("ENETUNREACH", "connect ENETUNREACH")).toMatch(
+        /host wlc\.example\.com:443 unreachable/
+      );
+    });
+
+    it("falls back to the raw code and message for unrecognized errors", () => {
+      expect(describeNetworkError("ECONNRESET", "socket hang up")).toBe(
+        "ECONNRESET: socket hang up"
+      );
+    });
+
+    it("falls back to the raw message when there's no error code", () => {
+      expect(describeNetworkError(undefined, "something odd happened")).toBe(
+        "something odd happened"
+      );
+    });
+  });
 });

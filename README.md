@@ -9,6 +9,20 @@ npm install
 npm run build
 ```
 
+## Entwicklung
+
+```
+npm test              # vitest run
+npm run test:coverage # inkl. Coverage-Report (v8)
+npm run lint
+npm run format:check
+```
+
+Der eigentliche Tool-Server wird in `src/server.ts` als `createServer(restconf)` gebaut (getrennt
+von `src/index.ts`, das nur noch Env-Config lädt und den stdio-Transport verbindet) — dadurch lässt
+sich die komplette Tool-Registrierung in Tests über den SDK-eigenen In-Memory-Transport ansprechen,
+siehe `test/server.test.ts`.
+
 ## Konfiguration (Umgebungsvariablen)
 
 | Variable            | Pflicht | Beschreibung                                      |

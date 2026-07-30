@@ -91,6 +91,29 @@ describe("listAccessPoints", () => {
 
     expect(await listAccessPoints(client)).toEqual([]);
   });
+
+  it("wraps a bare (non-array) single-entry container as a one-element list", async () => {
+    // Some devices return a bare object instead of a single-element array when there's exactly
+    // one entry — asArray must unwrap-and-rewrap that case rather than misreading it as a list.
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data": {
+        "Cisco-IOS-XE-wireless-access-point-oper:capwap-data": {
+          name: "AP1",
+          "wtp-mac": "aa:bb:cc:dd:ee:ff",
+        },
+      },
+    });
+
+    expect(await listAccessPoints(client)).toEqual([
+      {
+        name: "AP1",
+        wtpMac: "aa:bb:cc:dd:ee:ff",
+        ipAddr: undefined,
+        model: undefined,
+        softwareVersion: undefined,
+      },
+    ]);
+  });
 });
 
 describe("listWirelessClients", () => {
@@ -192,6 +215,21 @@ describe("listWirelessClients", () => {
         "common-oper-data": [{ "client-mac": "11:22:33:44:55:66" }],
       });
     };
+
+    const clients = await listWirelessClients(client);
+
+    expect(clients[0].ipv4Address).toBeUndefined();
+  });
+
+  it("leaves ipv4Address undefined when the sisf-db-mac entry has no usable ip-addr binding", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-client-oper:client-oper-data/common-oper-data": {
+        "common-oper-data": [{ "client-mac": "11:22:33:44:55:66" }],
+      },
+      "Cisco-IOS-XE-wireless-client-oper:client-oper-data/sisf-db-mac": {
+        "sisf-db-mac": [{ "client-mac": "11:22:33:44:55:66", "ipv4-binding": [{ "ip-key": {} }] }],
+      },
+    });
 
     const clients = await listWirelessClients(client);
 
@@ -372,6 +410,32 @@ describe("listApRadios", () => {
       },
     ]);
   });
+
+  it("leaves RRM-derived fields undefined when the rrm-measurement path is unavailable", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/radio-oper-data": {
+        "radio-oper-data": [{ "wtp-mac": "aa:bb:cc:dd:ee:ff", "radio-slot-id": 1 }],
+      },
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data": {
+        "capwap-data": [{ "wtp-mac": "aa:bb:cc:dd:ee:ff", name: "AP1" }],
+      },
+    });
+    client.get = (path: string) => {
+      if (path.endsWith("rrm-measurement"))
+        return Promise.reject(new Error("not supported on this device"));
+      return Promise.resolve(
+        path.endsWith("radio-oper-data")
+          ? { "radio-oper-data": [{ "wtp-mac": "aa:bb:cc:dd:ee:ff", "radio-slot-id": 1 }] }
+          : { "capwap-data": [{ "wtp-mac": "aa:bb:cc:dd:ee:ff", name: "AP1" }] }
+      );
+    };
+
+    const radios = await listApRadios(client);
+
+    expect(radios[0].channelUtilizationPercent).toBeUndefined();
+    expect(radios[0].clientCount).toBeUndefined();
+    expect(radios[0].noiseFloor).toBeUndefined();
+  });
 });
 
 describe("getWlcHealth", () => {
@@ -430,6 +494,23 @@ describe("getWlcHealth", () => {
       radiosDown: 0,
       misconfiguredApCount: 0,
     });
+  });
+
+  it("defaults to undefined fields when the CPU/radio-stats/join-count containers are empty", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-process-cpu-oper:cpu-usage/cpu-utilization?fields=five-seconds;one-minute;five-minutes":
+        {},
+      "Cisco-IOS-XE-memory-oper:memory-statistics": {},
+      "Cisco-IOS-XE-device-hardware-oper:device-hardware-data": {},
+      "Cisco-IOS-XE-wireless-ap-global-oper:ap-global-oper-data/ewlc-ap-stats": {},
+      "Cisco-IOS-XE-wireless-ap-global-oper:ap-global-oper-data/emltd-join-count-stat": {},
+    });
+
+    const health = await getWlcHealth(client);
+
+    expect(health.cpuFiveSecPercent).toBeUndefined();
+    expect(health.radiosUp).toBeUndefined();
+    expect(health.joinedApCount).toBeUndefined();
   });
 });
 
@@ -666,5 +747,22 @@ describe("listApTags", () => {
     expect(tags[0].policyTagName).toBe("Tag_Keller");
     expect(tags[0].siteTagName).toBe("Keller-Site");
     expect(tags[0].rfTagName).toBe("default-rf-tag");
+  });
+
+  it("leaves tag names undefined when neither resolved nor per-tag containers are present", async () => {
+    const client = fakeClient({
+      "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data": {
+        "capwap-data": [
+          { "wtp-mac": "aa:bb:cc:dd:ee:ff", name: "AP1", "tag-info": { "tag-source": "default" } },
+        ],
+      },
+    });
+
+    const tags = await listApTags(client);
+
+    expect(tags[0].policyTagName).toBeUndefined();
+    expect(tags[0].siteTagName).toBeUndefined();
+    expect(tags[0].rfTagName).toBeUndefined();
+    expect(tags[0].tagSource).toBe("default");
   });
 });
