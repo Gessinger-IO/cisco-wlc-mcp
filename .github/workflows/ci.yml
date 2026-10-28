@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: 24.x
+          node-version: 26.x
           registry-url: "https://registry.npmjs.org"
       # Trusted Publishing (OIDC) requires npm >= 11.5.1; the version bundled
       # with setup-node may be older, so make sure it's current.
