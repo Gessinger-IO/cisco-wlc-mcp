@@ -3,7 +3,9 @@
   "extends": ["config:best-practices", "mergeConfidence:all-badges"],
   "labels": ["renovate"],
   "assignees": ["NurPech"],
-  "dependencyDashboard": true,
+  "dependencyDashboard": {
+    "enabled": true
+  },
   "osvVulnerabilityAlerts": true,
   "packageRules": [
     {
