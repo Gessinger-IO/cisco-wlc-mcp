@@ -43,7 +43,7 @@
     "@alcalzone/release-script-plugin-license": "5.2.2",
     "@alcalzone/release-script-plugin-manual-review": "5.2.0",
     "@eslint/js": "10.0.1",
-    "@types/node": "26.6.7",
+    "@types/node": "26.6.10",
     "@vitest/coverage-v8": "5.1.1",
     "eslint": "10.15.0",
     "eslint-config-prettier": "10.1.8",
